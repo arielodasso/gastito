@@ -1,0 +1,154 @@
+/* Warm Parchment / Claude Style Reference */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f8f8f6;
+  --foreground: #121212;
+  --card: #ffffff;
+  --card-soft: #efeeeb;
+  --border: #e7e6e1;
+  --muted: #7b7974;
+  --accent: #d97757;
+}
+
+/* Prevent tailwind from injecting preflight that conflicts with our warm palette */
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  background-color: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom color palette */
+:root {
+  --color-carbon-ink: #121212;
+  --color-graphite: #373734;
+  --color-ashen: #7b7974;
+  --color-clay: #d97757;
+  --color-bone-parchment: #f8f8f6;
+  --color-paper-white: #ffffff;
+  --color-soft-stone: #efeeeb;
+  --color-border: #e7e6e1;
+}
+
+/* Base types using our palette */
+.text-carbon-primary {
+  color: #121212;
+}
+
+.text-graphite-secondary {
+  color: #373734;
+}
+
+.text-ashen-secondary {
+  color: #7b7974;
+}
+
+.text-muted-caption {
+  color: #7b7974;
+}
+
+.border-warm-neutral {
+  border-color: #e7e6e1;
+}
+
+/* Card styles */
+.card-warm {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.card-soft {
+  background-color: var(--card-soft);
+  border-radius: 12px;
+}
+
+/* Button styles - CTA primary in carbon, accent only for decorative elements */
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-full px-4 py-2;
+  background-color: #121212;
+  color: #f8f8f6;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: #0d0d0d;
+  color: #f8f8f6;
+}
+
+.btn-accent {
+  @apply text-[var(--color-clay)] font-medium;
+}
+
+/* Shadow style from design spec */
+.shadow-warm {
+  box-shadow: rgba(0, 0, 0, 0.04) 0px 4px 20px 0px;
+}
+
+/* Input styles */
+.input-warm {
+  @apply bg-white border border-[#e7e6e1] rounded-full px-4 py-2 font-size-sm;
+}
+
+/* Focus styles */
+.focus-warm:focus {
+  @apply outline-none ring-2 ring-[#d97757] ring-offset-background;
+}
+
+/* Table styles */
+.table-warm {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-warm th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-graphite);
+  border-bottom: 1px solid var(--border);
+}
+
+.table-warm td {
+  padding: 12px 16px;
+  font-size: 0.875rem;
+  color: var(--color-carbon-primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.table-warm tr:hover td {
+  background-color: var(--card-soft);
+}
+
+/* Revenue/expense type badges */
+.badge-necesidades {
+  @apply text-[var(--color-clay)] bg-[var(--card-soft)] px-2 py-0.5 rounded text-xs;
+}
+
+.badge-deseos {
+  @apply text-[var(--color-clay)] bg-[var(--card-soft)] px-2 py-0.5 rounded text-xs;
+}
+
+.badge-ahorro {
+  @apply text-[var(--color-clay)] bg-[var(--card-soft)] px-2 py-0.5 rounded text-xs;
+}
+
+/* Status badges */
+.badge-si {
+  @apply text-[var(--color-clay)];
+}
+
+.badge-no {
+  @apply text-graphite-secondary;
+}
