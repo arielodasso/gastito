@@ -1,6 +1,7 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/src/supabaseClient";
-import { v4 as uuidv4 } from "uuid";
 
 interface Gasto {
   id: string;
@@ -58,18 +59,14 @@ export default function Gastos() {
   }
 
   async function handleSubmit() {
-    if (!nuevoGasto.concepto || nuevoGasto.monto <= 0) return;
+    if (!nuevoGasto.concepto || (nuevoGasto.monto ?? 0) <= 0) return;
 
-    const montoARS = nuevoGasto.moneda === "ARS"
-      ? nuevoGasto.monto
-      : nuevoGasto.monto * nuevoGasto.tipo_cambio_ars;
-
-    const mesClave = new Date(nuevoGasto.fecha).toLocaleString("es-ES", { month: "long", year: "numeric" });
+    const mesClave = new Date(nuevoGasto.fecha ?? Date.now()).toLocaleString("es-ES", { month: "long", year: "numeric" });
 
     const { data, error } = await supabase
       .from("gastos")
       .insert([{
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         fecha: nuevoGasto.fecha,
         concepto: nuevoGasto.concepto,
         categoria: nuevoGasto.categoria,
@@ -77,7 +74,6 @@ export default function Gastos() {
         monto: nuevoGasto.monto,
         moneda: nuevoGasto.moneda,
         tipo_cambio_ars: nuevoGasto.tipo_cambio_ars,
-        monto_ars: montoARS,
         medio_pago: nuevoGasto.medio_pago,
         fijo_variable: nuevoGasto.fijo_variable,
         mes_clave: mesClave,
@@ -121,7 +117,7 @@ export default function Gastos() {
   if (error) {
     return (
       <div className="min-h-screen p-8">
-        <div className="alert alert-error">{error}<button onClick={() => fetchGastos() className="btn-link hover:underline">Reintentar</button></div>
+        <div className="alert alert-error">{error}<button onClick={() => fetchGastos()} className="btn-link hover:underline">Reintentar</button></div>
       </div>
     );
   }
@@ -167,7 +163,7 @@ export default function Gastos() {
               />
             </div>
 
-            <div sm:col-span-2>
+            <div className="sm:col-span-2">
               <label className="text-sm text-graphite-secondary block mb-1">Categoría</label>
               <select
                 value={nuevoGasto.categoria}
@@ -284,9 +280,9 @@ export default function Gastos() {
           <div>
             <label className="text-sm text-graphite-secondary block mb-1">Impacta Resultados</label>
             <select
-              value={nuevoGasto.impacta_resultados}
+              value={String(nuevoGasto.impacta_resultados ?? true)}
               onChange={(e) =>
-                setNuevoGasto({ ...nuevoGasto, impacto_resultados: e.target.value === "true" })
+                setNuevoGasto({ ...nuevoGasto, impacta_resultados: e.target.value === "true" })
               }
               className="input-warm"
             >
@@ -342,7 +338,7 @@ export default function Gastos() {
                 </td>
                 <td>{gasto.monto_ars.toLocaleString("es-AR")} ARS</td>
                 <td>
-                  <span className="badge-{gasto.medio_pago}">{gasto.medio_pago}</span>
+                  <span className={`badge-${gasto.medio_pago}`}>{gasto.medio_pago}</span>
                 </td>
                 <td>
                   <span className={gasto.fijo_variable === "Fijo" ? "text-carbon-primary" : "text-graphite-secondary"}>
@@ -358,7 +354,7 @@ export default function Gastos() {
                 </td>
                 <td>
                   <button
-                    onClick={() => window.location.href = `/gastos/editar/${gasto.id}`}
+                    onClick={() => { window.location.href = `/gastos/editar/${gasto.id}`; }}
                     className="text-[var(--clay)] text-sm hover:underline"
                   >
                     Editar

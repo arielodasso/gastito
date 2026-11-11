@@ -1,4 +1,4 @@
--- Supabase Migration: 20261106_003_gastos.sql
+﻿-- Supabase Migration: 20261106_003_gastos.sql
 -- Gastos: Fecha, Concepto, Categoría, Tipo 50/30/20, Monto, Moneda, Tipo de cambio, Monto ARS, Medio de pago, Fijo/Variable, Mes clave, Impacta resultados
 
 CREATE TABLE IF NOT EXISTS gastos (
@@ -15,6 +15,6 @@ CREATE TABLE IF NOT EXISTS gastos (
   fijo_variable TEXT NOT NULL DEFAULT 'Variable' CHECK (fijo_variable IN ('Fijo', 'Variable')),
   mes_clave TEXT NOT NULL,
   impacta_resultados BOOLEAN NOT NULL DEFAULT TRUE,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('now'::text, now()),
-  actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('now'::text, now())
+  creado_en TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT now()
 );

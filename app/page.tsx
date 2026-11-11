@@ -1,7 +1,8 @@
+"use client";
+
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useState } from "react";
 import { supabase } from "@/src/supabaseClient";
-import { Database } from "@/types/supabase";
 
 interface SummaryStats {
   patrimonioInicial: number;
@@ -247,22 +248,22 @@ export default function Dashboard() {
       {/* Quick Action Buttons */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-6">
         <button
-          onClick={() => window.location.href = "/ingresos"
+          onClick={() => { window.location.href = "/ingresos"; }}
           className="btn-primary w-full">
           Agregar Ingreso
         </button>
         <button
-          onClick={() => window.location.href = "/gastos"
+          onClick={() => { window.location.href = "/gastos"; }}
           className="btn-primary w-full">
           Agregar Gasto
         </button>
         <button
-          onClick={() => window.location.href = "/carga-rapida"
+          onClick={() => { window.location.href = "/carga-rapida"; }}
           className="btn-accent w-full text-[var(--clay)] border border-[var(--clay)]">
           Carga Rápida (Texto/Voz)
         </button>
         <button
-          onClick={() => window.location.href = "/patrimonio"
+          onClick={() => { window.location.href = "/patrimonio"; }}
           className="btn-primary w-full">
           Ver Patrimonio
         </button>

@@ -1,4 +1,4 @@
--- Supabase Migration: 20261106_004_patrimonio.sql
+﻿-- Supabase Migration: 20261106_004_patrimonio.sql
 -- Patrimonio y Resumen: Evolución mensual (Patrimonio inicial, Ingresos, Gastos, Patrimonio final) y cumplimiento regla 50/30/20
 
 CREATE TABLE IF NOT EXISTS patrimonio (
@@ -9,9 +9,9 @@ CREATE TABLE IF NOT EXISTS patrimonio (
   patrimonio_inicial_ars NUMERIC(15,2) NOT NULL DEFAULT 0,
   ingresos_mes_ars NUMERIC(15,2) NOT NULL DEFAULT 0,
   gastos_mes_ars NUMERIC(15,2) NOT NULL DEFAULT 0,
-  patrimonio_final_ars NUMERIC(15,2) NOT NULL GENERATED ALWAYS AS (patrimonio_inicial_ros + ingresos_mes_ars - gastos_mes_ars) STORED,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('now'::text, now()),
-  actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('now'::text, now())
+  patrimonio_final_ars NUMERIC(15,2) GENERATED ALWAYS AS (patrimonio_inicial_ars + ingresos_mes_ars - gastos_mes_ars) STORED,
+  creado_en TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 -- Resumen de cumplimiento 50/30/20 por mes
@@ -29,6 +29,6 @@ CREATE TABLE IF NOT EXISTS resumen_503020 (
   cumplimiento_nec_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
   cumplimiento_des_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
   cumplimiento_ahorro_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('now'::text, now()),
-  actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('now'::text, now())
+  creado_en TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT now()
 );

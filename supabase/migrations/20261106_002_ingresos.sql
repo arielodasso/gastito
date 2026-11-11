@@ -1,4 +1,4 @@
--- Supabase Migration: 20261106_002_ingresos.sql
+﻿-- Supabase Migration: 20261106_002_ingresos.sql
 -- Ingresos: Fecha, Cliente / Fuente, Tipo, Proyecto, Monto, Moneda, Tipo de cambio a ARS, Monto ARS, Cobrado (Sí/No), Mes clave, Notas, Impacta resultados
 
 CREATE TABLE IF NOT EXISTS ingresos (
@@ -15,6 +15,6 @@ CREATE TABLE IF NOT EXISTS ingresos (
   mes_clave TEXT NOT NULL,
   notas TEXT,
   impacta_resultados BOOLEAN NOT NULL DEFAULT TRUE,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('now'::text, now()),
-  actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('now'::text, now())
+  creado_en TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT now()
 );

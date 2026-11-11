@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/src/supabaseClient";
 
@@ -52,7 +54,7 @@ export default function Patrimonio() {
   if (error) {
     return (
       <div className="min-h-screen p-8">
-        <div className="alert alert-error">{error}<button onClick={() => fetchData() className="btn-link hover:underline">Reintentar</button></div>
+        <div className="alert alert-error">{error}<button onClick={() => fetchData()} className="btn-link hover:underline">Reintentar</button></div>
       </div>
     );
   }
@@ -83,7 +85,7 @@ export default function Patrimonio() {
                 <div className="w-32 text-right">
                   <p className="text-2xl font-bold text-carbon-primary">{item.patrimonio_inicial_ars.toLocaleString("es-AR")} ARS</p>
                   <p className="text-graphite-secondary text-sm">Initial</p>
-                  <p className="text-2xl font-bold {item.patrimonio_final_ars >= item.patrimonio_inicial_ars ? "text-green-600" : "text-red-600"}">
+                  <p className={`text-2xl font-bold ${item.patrimonio_final_ars >= item.patrimonio_inicial_ars ? "text-green-600" : "text-red-600"}`}>
                     {item.patrimonio_final_ars.toLocaleString("es-AR")} ARS
                   </p>
                   <p className="text-graphite-secondary text-sm">Final</p>

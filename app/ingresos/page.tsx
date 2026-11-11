@@ -1,6 +1,7 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/src/supabaseClient";
-import { v4 as uuidv4 } from "uuid";
 
 interface Ingreso {
   id: string;
@@ -34,7 +35,7 @@ export default function Ingresos() {
     impacta_resultados: true,
   });
   const [loading, setLoading] = useState(true);
-  [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchIngresos();
@@ -58,18 +59,14 @@ export default function Ingresos() {
   }
 
   async function handleSubmit() {
-    if (!nuevoIngreso.cliente_fuente || nuevoIngreso.monto <= 0) return;
+    if (!nuevoIngreso.cliente_fuente || (nuevoIngreso.monto ?? 0) <= 0) return;
 
-    const montoARS = nuevoIngreso.moneda === "ARS"
-      ? nuevoIngreso.monto
-      : nuevoIngreso.monto * nuevoIngreso.tipo_cambio_ars;
-
-    const mesClave = new Date(nuevoIngreso.fecha).toLocaleString("es-ES", { month: "long", year: "numeric" });
+    const mesClave = new Date(nuevoIngreso.fecha ?? Date.now()).toLocaleString("es-ES", { month: "long", year: "numeric" });
 
     const { data, error } = await supabase
       .from("ingresos")
       .insert([{
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         fecha: nuevoIngreso.fecha,
         cliente_fuente: nuevoIngreso.cliente_fuente,
         tipo: nuevoIngreso.tipo,
@@ -77,7 +74,6 @@ export default function Ingresos() {
         monto: nuevoIngreso.monto,
         moneda: nuevoIngreso.moneda,
         tipo_cambio_ars: nuevoIngreso.tipo_cambio_ars,
-        monto_ars: montoARS,
         cobrado: nuevoIngreso.cobrado,
         mes_clave: mesClave,
         notas: nuevoIngreso.notas || "",
@@ -121,7 +117,7 @@ export default function Ingresos() {
   if (error) {
     return (
       <div className="min-h-screen p-8">
-        <div className="alert alert-error">{error}<button onClick={() => fetchIngresos() className="btn-link hover:underline">Reintentar</button></div>
+        <div className="alert alert-error">{error}<button onClick={() => fetchIngresos()} className="btn-link hover:underline">Reintentar</button></div>
       </div>
     );
   }
@@ -246,7 +242,7 @@ export default function Ingresos() {
             <div>
               <label className="text-sm text-graphite-secondary block mb-1">Cobrado (Sí/No)</label>
               <select
-                value=nuevoIngreso.cobrado
+                value={String(nuevoIngreso.cobrado)}
                 onChange={(e) =>
                   setNuevoIngreso({ ...nuevoIngreso, cobrado: e.target.value === "true" })
                 }
@@ -272,7 +268,7 @@ export default function Ingresos() {
             <div>
               <label className="text-sm text-graphite-secondary block mb-1">Impacta Resultados</label>
               <select
-                value=nuevoIngreso.impacta_resultados
+                value={String(nuevoIngreso.impacta_resultados)}
                 onChange={(e) =>
                   setNuevoIngreso({ ...nuevoIngreso, impacta_resultados: e.target.value === "true" })
                 }
@@ -330,7 +326,7 @@ export default function Ingresos() {
               <tr key={ingreso.id} className="border-b warm-border">
                 <td className="font-medium">{new Date(ingreso.fecha).toLocaleDateString("es-ES")}</td>
                 <td>{ingreso.cliente_fuente}</td>
-                <td className="badge-{ingreso.tipo === 'Freelance' ? '' : ''}">
+                <td>
                   {ingreso.tipo}
                 </td>
                 <td>{ingreso.proyecto || "-"}</td>
@@ -345,7 +341,7 @@ export default function Ingresos() {
                 <td>{ingreso.notas || "-"}</td>
                 <td>
                   <button
-                    onClick={() => window.location.href = `/ingresos/editar/${ingreso.id}`}
+                    onClick={() => { window.location.href = `/ingresos/editar/${ingreso.id}`; }}
                     className="text-[var(--clay)] text-sm hover:underline"
                   >
                     Editar
