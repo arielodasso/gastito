@@ -557,8 +557,8 @@ export default function Dashboard() {
                         {movement.tipo === "ingreso" ? "+" : "−"} {ars(movement.monto)}
                       </div>
                       <div style={{display: 'flex', gap: 6, marginTop: 4, fontSize: 12}}>
-                        <button className='btn btn-ghost btn-xs' onClick={() => handleDelete(movement)}>Eliminar</button>
-                        <button className='btn btn-ghost btn-xs' onClick={() => handleEditStart(movement)}>Editar</button>
+                        <button className='btn btn-ghost btn-xs' aria-label="Eliminar" onClick={() => handleDelete(movement)}>×</button>
+                        <button className='btn btn-ghost btn-xs' aria-label="Editar" onClick={() => handleEditStart(movement)}>✎</button>
                         <button className='btn btn-primary btn-xs' onClick={() => handleEditSave()}>Guardar</button>
                       </div>
                       {movement.tipo503020 ? (
