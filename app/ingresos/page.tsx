@@ -114,6 +114,22 @@ export default function IngresosPage() {
     setIngresos((rows) => rows.filter((row) => row.id !== id));
   }
 
+  async function handleEditIngreso(id: string) {
+    const newMonto = window.prompt("Nuevo monto:", "");
+    if (newMonto === null) return;
+    const num = Number(newMonto);
+    if (!Number.isFinite(num) || num <= 0) {
+      setError("Monto inválido");
+      return;
+    }
+    const { error } = await supabase.from("ingresos").update({ monto: num }).eq("id", id);
+    if (error) {
+      setError("No se pudo actualizar el ingreso.");
+    } else {
+      setIngresos((rows) => rows.map((r) => r.id === id ? { ...r, monto: num } as Ingreso : r));
+    }
+  }
+
   return (
     <>
       <TopNav />
@@ -400,13 +416,10 @@ export default function IngresosPage() {
                       {row.notas || "—"}
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <button
-                        type="button"
-                        className="btn-accent"
-                        onClick={() => handleDelete(row.id)}
-                      >
-                        Eliminar
-                      </button>
+                      <div style={{display: 'flex', gap: 4, fontSize: 12, alignItems: 'center'}}>
+                        <button className='btn btn-ghost btn-xs' aria-label="Eliminar" onClick={() => handleDelete(row.id)}>×</button>
+                        <button className='btn btn-ghost btn-xs' aria-label="Editar" onClick={() => handleEditIngreso(row.id)}>✎</button>
+                      </div>
                     </td>
                   </tr>
                 ))
