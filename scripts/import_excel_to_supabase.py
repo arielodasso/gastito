@@ -234,7 +234,11 @@ def main():
             }
         )
     print("Insertando patrimonio...")
-    insert_batches("patrimonio", patrimonio)
+    try:
+        insert_batches("patrimonio", patrimonio)
+        print("  Patrimonio insertado correctamente")
+    except RuntimeError as e:
+        print(f"  Advertencia: no se pudo insertar el patrimonio (RLS). Se continuará con ingresos y gastos. Error: {e}")
 
     # ------------------------------------------------------------------ Resumen
     ingresos_por_mes = defaultdict(float)
@@ -279,7 +283,11 @@ def main():
             }
         )
     print("Insertando resumen 50/30/20...")
-    insert_batches("resumen_503020", resumen)
+    try:
+        insert_batches("resumen_503020", resumen)
+        print("  Resumen insertado correctamente")
+    except RuntimeError as e:
+        print(f"  Advertencia: no se pudo insertar el resumen (RLS). Se continuará. Error: {e}")
 
     print("\nImportación completada:")
     print(f"  ingresos: {len(ingresos)}")
