@@ -1,363 +1,420 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/supabaseClient";
+import TopNav from "@/app/components/TopNav";
+import { amountOf, monthKeyOf, type Ingreso } from "@/app/lib/finance";
+import { ars, compactMoney, dateLabel, todayKey } from "@/app/lib/format";
 
-interface Ingreso {
-  id: string;
-  fecha: string;
-  cliente_fuente: string;
-  tipo: string;
-  proyecto: string | null;
-  monto: number;
-  moneda: string;
-  tipo_cambio_ars: number;
-  monto_ars: number;
-  cobrado: boolean;
-  mes_clave: string;
-  notas: string;
-  impacta_resultados: boolean;
-}
+const EMPTY_FORM = {
+  fecha: new Date().toISOString().slice(0, 10),
+  cliente_fuente: "",
+  tipo: "Freelance",
+  proyecto: "",
+  monto: "",
+  moneda: "ARS",
+  tipo_cambio_ars: "1",
+  cobrado: "true",
+  notas: "",
+};
 
-export default function Ingresos() {
+export default function IngresosPage() {
   const [ingresos, setIngresos] = useState<Ingreso[]>([]);
-  const [nuevoIngreso, setNuevoIngreso] = useState<Partial<Ingreso>>({
-    fecha: new Date().toISOString().split("T")[0],
-    cliente_fuente: "",
-    tipo: "Otro",
-    proyecto: "",
-    monto: 0,
-    moneda: "ARS",
-    tipo_cambio_ars: 1,
-    cobrado: false,
-    mes_clave: "",
-    notas: "",
-    impacta_resultados: true,
-  });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchIngresos();
+  const load = useCallback(async () => {
+    const { data, error: loadError } = await supabase
+      .from("ingresos")
+      .select(
+        "id,fecha,cliente_fuente,tipo,proyecto,monto,moneda,monto_ars,cobrado,notas"
+      )
+      .order("fecha", { ascending: false });
+    if (loadError) {
+      setError("No pudimos cargar los ingresos.");
+    } else {
+      setIngresos((data as Ingreso[]) || []);
+      setError(null);
+    }
+    setLoading(false);
   }, []);
 
-  async function fetchIngresos() {
-    try {
-      const { data, error } = await supabase
-        .from("ingresos")
-        .select("*")
-        .order("fecha", { ascending: false });
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
-      if (error) throw error;
-      setIngresos(data || []);
-      setLoading(false);
-    } catch (err) {
-      console.error("Error fetching ingresos:", err);
-      setError("Error cargando ingresos");
-      setLoading(false);
+  const total = useMemo(
+    () => ingresos.reduce((sum, row) => sum + amountOf(row), 0),
+    [ingresos]
+  );
+  const currentMonth = todayKey();
+  const monthTotal = useMemo(
+    () =>
+      ingresos
+        .filter((row) => monthKeyOf(row.fecha) === currentMonth)
+        .reduce((sum, row) => sum + amountOf(row), 0),
+    [ingresos, currentMonth]
+  );
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const monto = Number(form.monto);
+    if (!form.cliente_fuente.trim() || !Number.isFinite(monto) || monto <= 0) {
+      setError("Completá el cliente y un monto mayor a cero.");
+      return;
     }
-  }
 
-  async function handleSubmit() {
-    if (!nuevoIngreso.cliente_fuente || (nuevoIngreso.monto ?? 0) <= 0) return;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
 
-    const mesClave = new Date(nuevoIngreso.fecha ?? Date.now()).toLocaleString("es-ES", { month: "long", year: "numeric" });
-
-    const { data, error } = await supabase
+    const { data, error: insertError } = await supabase
       .from("ingresos")
-      .insert([{
-        id: crypto.randomUUID(),
-        fecha: nuevoIngreso.fecha,
-        cliente_fuente: nuevoIngreso.cliente_fuente,
-        tipo: nuevoIngreso.tipo,
-        proyecto: nuevoIngreso.proyecto || null,
-        monto: nuevoIngreso.monto,
-        moneda: nuevoIngreso.moneda,
-        tipo_cambio_ars: nuevoIngreso.tipo_cambio_ars,
-        cobrado: nuevoIngreso.cobrado,
-        mes_clave: mesClave,
-        notas: nuevoIngreso.notas || "",
-        impacta_resultados: nuevoIngreso.impacta_resultados,
-      }])
-      .select()
+      .insert([
+        {
+          id: crypto.randomUUID(),
+          fecha: form.fecha,
+          cliente_fuente: form.cliente_fuente.trim(),
+          tipo: form.tipo,
+          proyecto: form.proyecto.trim() || null,
+          monto,
+          moneda: form.moneda,
+          tipo_cambio_ars: Number(form.tipo_cambio_ars) || 1,
+          cobrado: form.cobrado === "true",
+          mes_clave: form.fecha.slice(0, 7),
+          notas: form.notas.trim(),
+          impacta_resultados: true,
+        },
+      ])
+      .select("*")
       .single();
 
-    if (error) throw error;
-    setIngresos([data!, ...ingresos]);
-    setNuevoIngreso({
-      fecha: new Date().toISOString().split("T")[0],
-      cliente_fuente: "",
-      tipo: "Otro",
-      proyecto: "",
-      monto: 0,
-      moneda: "ARS",
-      tipo_cambio_ars: 1,
-      cobrado: false,
-      mes_clave: "",
-      notas: "",
-      impacta_resultados: true,
-    });
+    if (insertError) {
+      setError("No se pudo guardar el ingreso.");
+    } else {
+      setIngresos((rows) => [data as Ingreso, ...rows]);
+      setForm({ ...EMPTY_FORM, fecha: form.fecha });
+      setNotice("Ingreso guardado.");
+    }
+    setSaving(false);
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Seguro que quieres eliminar este ingreso?")) return;
-    const { error } = await supabase.from("ingresos").delete().eq("id", id);
-    if (error) throw error;
-    setIngresos(ingresos.filter((i) => i.id !== id));
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-8">
-        <div className="prose max-w-none">Cargando ingresos...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen p-8">
-        <div className="alert alert-error">{error}<button onClick={() => fetchIngresos()} className="btn-link hover:underline">Reintentar</button></div>
-      </div>
-    );
+    if (!window.confirm("¿Eliminar este ingreso?")) return;
+    const { error: deleteError } = await supabase.from("ingresos").delete().eq("id", id);
+    if (deleteError) {
+      setError("No se pudo eliminar el ingreso.");
+      return;
+    }
+    setIngresos((rows) => rows.filter((row) => row.id !== id));
   }
 
   return (
-    <main className="max-w-5xl mx-auto p-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold text-carbon-primary">Ingresos</h1>
-        <p className="text-graphite-secondary text-sm">Registra tus fuentes de ingreso</p>
-      </header>
-
-      {/* Add Income Form */}
-      <div className="card-warm shadow-warm p-6 mb-6">
-        <h2 className="text-xl font-semibold text-carbon-primary mb-4">Nuevo Ingreso</h2>
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            handleSubmit();
-          }}
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Fecha</label>
-              <input
-                type="date"
-                value={nuevoIngreso.fecha}
-                onChange={(e) =>
-                  setNuevoIngreso({ ...nuevoIngreso, fecha: e.target.value })
-                }
-                className="input-warm"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Cliente / Fuente</label>
-              <input
-                value={nuevoIngreso.cliente_fuente}
-                onChange={(e) =>
-                  setNuevoIngreso({ ...nuevoIngreso, cliente_fuente: e.target.value })
-                }
-                className="input-warm"
-                placeholder="Ej: Marcelo, Agustina, Cliente X"
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="text-sm text-graphite-secondary block mb-1">Tipo</label>
-              <select
-                value={nuevoIngreso.tipo}
-                onChange={(e) =>
-                  setNuevoIngreso({ ...nuevoIngreso, tipo: e.target.value })
-                }
-                className="input-warm"
-              >
-                <option value="Freelance">Freelance</option>
-                <option value="Otro">Otro</option>
-                <option value="Sueldo">Sueldo</option>
-                <option value="Inversión">Inversión</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Proyecto</label>
-              <input
-                value={nuevoIngreso.proyecto || ""}
-                onChange={(e) =>
-                  setNuevoIngreso({ ...nuevoIngreso, proyecto: e.target.value || null })
-                }
-                className="input-warm"
-                placeholder="Proyecto opcional (ej: Viaja Seguro)"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Monto</label>
-              <input
-                type="number"
-                value={nuevoIngreso.monto}
-                onChange={(e) =>
-                  setNuevoIngreso({ ...nuevoIngreso, monto: Number(e.target.value) })
-                }
-                className="input-warm"
-                min="0"
-                step="100"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Moneda</label>
-              <select
-                value={nuevoIngreso.moneda}
-                onChange={(e) =>
-                  setNuevoIngreso({ ...nuevoIngreso, moneda: e.target.value })
-                }
-                className="input-warm"
-              >
-                <option value="ARS">ARS (Peso Argentino)</option>
-                <option value="USD">USD (Dólar)</option>
-                <option value="EUR">EUR (Euro)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Tipo de Cambio a ARS</label>
-              <input
-                type="number"
-                value={nuevoIngreso.tipo_cambio_ars}
-                onChange={(e) =>
-                  setNuevoIngreso({ ...nuevoIngreso, tipo_cambio_ars: Number(e.target.value) })
-                }
-                className="input-warm"
-                min="0"
-                step="0.0001"
-                placeholder="1 USD = X ARS"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Cobrado (Sí/No)</label>
-              <select
-                value={String(nuevoIngreso.cobrado)}
-                onChange={(e) =>
-                  setNuevoIngreso({ ...nuevoIngreso, cobrado: e.target.value === "true" })
-                }
-                className="input-warm"
-              >
-                <option value="true">Sí</option>
-                <option value="false">No</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Mes Clave</label>
-              <input
-                value={nuevoIngreso.mes_clave}
-                onChange={(e) =>
-                  setNuevoIngreso({ ...nuevoIngreso, mes_clave: e.target.value })
-                }
-                className="input-warm"
-                placeholder="Ej: enero 2026"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Impacta Resultados</label>
-              <select
-                value={String(nuevoIngreso.impacta_resultados)}
-                onChange={(e) =>
-                  setNuevoIngreso({ ...nuevoIngreso, impacta_resultados: e.target.value === "true" })
-                }
-                className="input-warm"
-              >
-                <option value="true">Sí</option>
-                <option value="false">No</option>
-              </select>
-            </div>
-          </div>
-
+    <>
+      <TopNav />
+      <main className="container page">
+        <div className="section-head">
           <div>
-            <label className="text-sm text-graphite-secondary block mb-1">Notas</label>
-            <textarea
-              value={nuevoIngreso.notas || ""}
-              onChange={(e) =>
-                setNuevoIngreso({ ...nuevoIngreso, notas: e.target.value })
-              }
-              className="input-warm rounded-md h-24 p-3 resize-y"
-              rows={3}
-              placeholder="Notas adicionales..."
-            ></textarea>
+            <span className="kicker">Ingresos</span>
+            <h2>Todo lo que entra</h2>
+            <p>Registrá cobros y freelances. El panel recalcula el 50/30/20 solo.</p>
           </div>
+          <Link href="/" className="btn btn-ghost btn-sm">
+            Volver al resumen
+          </Link>
+        </div>
 
-          <button
-            type="submit"
-            className="btn-primary w-full mt-4"
-          >
-            Registrar Ingreso
-          </button>
-        </form>
-      </div>
+        <div
+          className="stat-grid"
+          style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+        >
+          <div className="stat">
+            <span className="stat-label">Total histórico</span>
+            <span className="stat-value">{compactMoney(total)}</span>
+            <span className="stat-foot">{ingresos.length} movimientos</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">Este mes</span>
+            <span className="stat-value">{compactMoney(monthTotal)}</span>
+            <span className="stat-foot">
+              {ingresos.filter((row) => monthKeyOf(row.fecha) === currentMonth).length} movimientos
+            </span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">Promedio por movimiento</span>
+            <span className="stat-value">
+              {compactMoney(ingresos.length ? total / ingresos.length : 0)}
+            </span>
+            <span className="stat-foot">En ARS</span>
+          </div>
+        </div>
 
-      {/* Incomes List */}
-      {ingresos.length === 0 && (
-        <p className="text-ashen-secondary mt-4">No hay ingresos registrados. Usa el formulario de arriba para agregar uno.</p>
-      )}
+        {error ? (
+          <div className="alert" style={{ marginTop: 18 }}>
+            {error}
+            <button className="btn-accent" type="button" onClick={load}>
+              Reintentar
+            </button>
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="alert" style={{ marginTop: 18, color: "var(--mint-ink)", background: "#e7f8f1", borderColor: "#bcebd9" }}>
+            {notice}
+          </div>
+        ) : null}
 
-      <div className="overflow-x-auto mt-6">
-        <table className="table-warm">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Cliente / Fuente</th>
-              <th>Tipo</th>
-              <th>Proyecto</th>
-              <th>Monto (ARS)</th>
-              <th>Cobrado</th>
-              <th>Notas</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ingresos.map((ingreso) => (
-              <tr key={ingreso.id} className="border-b warm-border">
-                <td className="font-medium">{new Date(ingreso.fecha).toLocaleDateString("es-ES")}</td>
-                <td>{ingreso.cliente_fuente}</td>
-                <td>
-                  {ingreso.tipo}
-                </td>
-                <td>{ingreso.proyecto || "-"}</td>
-                <td>{ingreso.monto_ars.toLocaleString("es-AR")} ARS</td>
-                <td>
-                  <span
-                    className={ingreso.cobrado ? "badge-si" : "badge-no"}
-                  >
-                    {ingreso.cobrado ? "Sí" : "No"}
-                  </span>
-                </td>
-                <td>{ingreso.notas || "-"}</td>
-                <td>
-                  <button
-                    onClick={() => { window.location.href = `/ingresos/editar/${ingreso.id}`; }}
-                    className="text-[var(--clay)] text-sm hover:underline"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(ingreso.id)}
-                    className="text-red-600 text-sm hover:underline ml-2"
-                  >
-                    Eliminar
-                  </button>
-                </td>
+        <div className="grid-2" style={{ marginTop: 18, alignItems: "start" }}>
+          <form className="card" onSubmit={handleSubmit}>
+            <p className="form-section-title">Nuevo ingreso</p>
+            <p className="form-section-sub">
+              Cargá el cobro y listo. Podés dejarlo en USD y convertir a ARS.
+            </p>
+
+            <div className="form-grid">
+              <div className="form-field">
+                <label className="form-label" htmlFor="fecha">
+                  Fecha
+                </label>
+                <input
+                  id="fecha"
+                  type="date"
+                  className="input-warm"
+                  value={form.fecha}
+                  onChange={(event) => setForm({ ...form, fecha: event.target.value })}
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="cliente">
+                  Cliente / Fuente
+                </label>
+                <input
+                  id="cliente"
+                  className="input-warm"
+                  placeholder="Ej: Marcelo, Hayas, Agustina"
+                  value={form.cliente_fuente}
+                  onChange={(event) =>
+                    setForm({ ...form, cliente_fuente: event.target.value })
+                  }
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="tipo">
+                  Tipo
+                </label>
+                <select
+                  id="tipo"
+                  className="input-warm"
+                  value={form.tipo}
+                  onChange={(event) => setForm({ ...form, tipo: event.target.value })}
+                >
+                  <option>Freelance</option>
+                  <option>Otro</option>
+                  <option>Sigma Tecnologías</option>
+                  <option>Sueldo</option>
+                  <option>Inversión</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="proyecto">
+                  Proyecto
+                </label>
+                <input
+                  id="proyecto"
+                  className="input-warm"
+                  placeholder="Opcional"
+                  value={form.proyecto}
+                  onChange={(event) => setForm({ ...form, proyecto: event.target.value })}
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="monto">
+                  Monto
+                </label>
+                <input
+                  id="monto"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="input-warm"
+                  placeholder="0"
+                  value={form.monto}
+                  onChange={(event) => setForm({ ...form, monto: event.target.value })}
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="moneda">
+                  Moneda
+                </label>
+                <select
+                  id="moneda"
+                  className="input-warm"
+                  value={form.moneda}
+                  onChange={(event) => setForm({ ...form, moneda: event.target.value })}
+                >
+                  <option value="ARS">ARS</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="cambio">
+                  Tipo de cambio a ARS
+                </label>
+                <input
+                  id="cambio"
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  className="input-warm"
+                  value={form.tipo_cambio_ars}
+                  onChange={(event) =>
+                    setForm({ ...form, tipo_cambio_ars: event.target.value })
+                  }
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="cobrado">
+                  Cobrado
+                </label>
+                <select
+                  id="cobrado"
+                  className="input-warm"
+                  value={form.cobrado}
+                  onChange={(event) => setForm({ ...form, cobrado: event.target.value })}
+                >
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+              <div className="form-field span-2">
+                <label className="form-label" htmlFor="notas">
+                  Notas
+                </label>
+                <textarea
+                  id="notas"
+                  className="input-warm"
+                  rows={2}
+                  placeholder="Opcional"
+                  value={form.notas}
+                  onChange={(event) => setForm({ ...form, notas: event.target.value })}
+                />
+              </div>
+            </div>
+
+            <button className="btn-primary" type="submit" style={{ width: "100%", marginTop: 16 }} disabled={saving}>
+              {saving ? "Guardando…" : "Registrar ingreso"}
+            </button>
+          </form>
+
+          <div className="card">
+            <p className="form-section-title">Atajos</p>
+            <p className="form-section-sub">
+              Para el día a día, la carga rápida entiende frases como “Cobra
+              30000 de Marcelo”.
+            </p>
+            <div style={{ display: "grid", gap: 10 }}>
+              <Link href="/carga-rapida" className="btn btn-primary">
+                Carga rápida
+              </Link>
+              <Link href="/gastos" className="btn btn-ghost">
+                Ir a gastos
+              </Link>
+              <Link href="/patrimonio" className="btn btn-ghost">
+                Ver patrimonio
+              </Link>
+            </div>
+
+            <div className="card-soft" style={{ marginTop: 16 }}>
+              <strong style={{ display: "block", marginBottom: 4 }}>
+                Cómo impacta
+              </strong>
+              <span className="muted" style={{ fontSize: 13.5, fontWeight: 600 }}>
+                Cada ingreso suma al patrimonio y define los objetivos 50/30/20
+                del mes en el resumen.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="section-head" style={{ marginTop: 26 }}>
+          <div>
+            <h2>Historial</h2>
+            <p>{ingresos.length} ingresos registrados.</p>
+          </div>
+        </div>
+
+        <div className="table-wrap">
+          <table className="table-warm">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Cliente / Fuente</th>
+                <th>Tipo</th>
+                <th>Proyecto</th>
+                <th>Monto</th>
+                <th>Cobrado</th>
+                <th>Notas</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </main>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="empty">
+                    Cargando ingresos…
+                  </td>
+                </tr>
+              ) : ingresos.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="empty">
+                    Todavía no hay ingresos.
+                  </td>
+                </tr>
+              ) : (
+                ingresos.map((row) => (
+                  <tr key={row.id}>
+                    <td>{dateLabel(row.fecha)}</td>
+                    <td style={{ fontWeight: 800 }}>{row.cliente_fuente}</td>
+                    <td>{row.tipo}</td>
+                    <td>{row.proyecto || "—"}</td>
+                    <td style={{ fontWeight: 800 }}>
+                      {ars(amountOf(row))}
+                      {row.moneda && row.moneda !== "ARS" ? (
+                        <span className="muted" style={{ fontWeight: 600 }}>
+                          {" "}
+                          ({row.monto} {row.moneda})
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <span className={row.cobrado ? "badge badge-ahorro" : "badge"}>
+                        {row.cobrado ? "Sí" : "No"}
+                      </span>
+                    </td>
+                    <td style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {row.notas || "—"}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        type="button"
+                        className="btn-accent"
+                        onClick={() => handleDelete(row.id)}
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </>
   );
 }

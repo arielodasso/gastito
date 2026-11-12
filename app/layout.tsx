@@ -1,8 +1,10 @@
+import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata = {
-  title: "Gastito - Finanzas Personales",
-  description: "Aplicación personal de finanzas y gestión de gastos",
+export const metadata: Metadata = {
+  title: "Gastito — Tus finanzas, claras",
+  description:
+    "Panel personal de finanzas: patrimonio, regla 50/30/20, ingresos y gastos de tu plantilla.",
 };
 
 export default function RootLayout({
@@ -11,10 +13,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className="min-h-full antialiased">
-      <body className="min-h-full bg-[var(--background)] text-[var(--foreground)]">
-        {children}
-      </body>
+    <html lang="es">
+      <body>{children}</body>
     </html>
   );
 }

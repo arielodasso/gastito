@@ -1,5 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-export default {
+const config = {
   darkMode: ["class"],
   content: [
     "./app/**/*.{ts,tsx}",
@@ -9,14 +9,25 @@ export default {
   theme: {
     extend: {
       colors: {
-        "bone-parchment": "#f8f8f6",
-        "paper-white": "#ffffff",
-        "soft-stone": "#efeeeb",
-        "warm-border": "#e7e6e1",
-        "carbon-ink": "#121212",
-        graphite: "#373734",
-        ashen: "#7b7974",
-        clay: "#d97757",
+        brand: "#f26654",
+        "brand-ink": "#d8483a",
+        "brand-soft": "#fdebe7",
+        surface: "#f6f7f9",
+        "surface-2": "#eef0f4",
+        canvas: "#ffffff",
+        ink: "#1f2330",
+        "ink-soft": "#535a6b",
+        muted: "#7d8394",
+        line: "#e4e6ec",
+        mint: "#c9f3e4",
+        sky: "#cfe9f5",
+        lemon: "#f2ebc9",
+        rose: "#f8d3d0",
+        lilac: "#d9d2f2",
+        clay: "#f26654",
+      },
+      fontFamily: {
+        sans: ["Nunito", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius, 0.5rem)",
@@ -27,3 +38,5 @@ export default {
   },
   plugins: [],
 };
+
+export default config;

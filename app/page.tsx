@@ -1,273 +1,582 @@
-"use client";
+﻿"use client";
 
-/* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/supabaseClient";
-
-interface SummaryStats {
-  patrimonioInicial: number;
-  ingresosMes: number;
-  gastosMes: number;
-  patrimonioFinal: number;
-  cumplimientoNec: number;
-  cumplimientoDes: number;
-  cumplimientoAhorro: number;
-}
+import TopNav from "@/app/components/TopNav";
+import QuickAdd from "@/app/components/QuickAdd";
+import { FlujoBars, PatrimonioChart } from "@/app/components/Charts";
+import {
+  buildMonthly,
+  buildMovements,
+  monthKeyOf,
+  topCategories,
+  RULE,
+  type Gasto,
+  type Ingreso,
+} from "@/app/lib/finance";
+import {
+  ars,
+  compactMoney,
+  dateLabel,
+  monthLabel,
+  pct,
+  signed,
+  todayKey,
+} from "@/app/lib/format";
 
 export default function Dashboard() {
-  const [stats, setStats] = useState<SummaryStats | null>(null);
+  const [ingresos, setIngresos] = useState<Ingreso[]>([]);
+  const [gastos, setGastos] = useState<Gasto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchSummary();
-  }, []);
-
-  async function fetchSummary() {
+  const load = useCallback(async () => {
     try {
-      // Get the latest patrimonio record
-      const { data: patrimonioData, error: patrimonioError } = await supabase
-        .from("patrimonio")
-        .select("*")
-        .order("ano", { ascending: false })
-        .limit(1);
+      const [incomeResult, expenseResult] = await Promise.all([
+        supabase
+          .from("ingresos")
+          .select(
+            "id,fecha,cliente_fuente,tipo,proyecto,monto,moneda,monto_ars,cobrado,notas"
+          )
+          .order("fecha", { ascending: false }),
+        supabase
+          .from("gastos")
+          .select(
+            "id,fecha,concepto,categoria,tipo_503020,monto,moneda,monto_ars,medio_pago,fijo_variable"
+          )
+          .order("fecha", { ascending: false }),
+      ]);
 
-      if (patrimonioError) throw patrimonioError;
+      if (incomeResult.error) throw incomeResult.error;
+      if (expenseResult.error) throw expenseResult.error;
 
-      // Get latest resumen 50/30/20
-      const { data: resumenData, error: resumenError } = await supabase
-        .from("resumen_503020")
-        .select("*")
-        .order("ano", { ascending: false })
-        .limit(1);
-
-      if (resumenError) throw resumenError;
-
-      // Get this month's totals from gastos and ingresos
-      const today = new Date();
-      const mesActual = today.getMonth() + 1; // 1-12
-      const anoActual = today.getFullYear();
-
-      const { data: ingresosData, error: ingresosError } = await supabase
-        .from("ingresos")
-        .select("monto_ars")
-        .gte("fecha", `${anoActual}-${mesActual}-01`)
-        .lt("fecha", `${anoActual}-${mesActual + 1}-01`);
-
-      if (ingresosError) throw ingresosError;
-
-      const { data: gastosData, error: gastosError } = await supabase
-        .from("gastos")
-        .select("monto_ars")
-        .gte("fecha", `${anoActual}-${mesActual}-01`)
-        .lt("fecha", `${anoActual}-${mesActual + 1}-01`);
-
-      if (gastosError) throw gastosError;
-
-      // Calculate totals
-      const totalIngresos = ingresosData?.reduce((sum, r) => sum + (r.monto_ars || 0), 0) || 0;
-      const totalGastos = gastosData?.reduce((sum, r) => sum + (r.monto_ars || 0), 0) || 0;
-
-      // Get initial heritage from the first patrimonio record or calculate
-      let patrimonioInicial = 0;
-      let patrimonioFinal = 0;
-      if (patrimonioData && patrimonioData.length > 0) {
-        const first = patrimonioData[patrimonioData.length - 1]; // oldest
-        patrimonioInicial = first.patrimonio_inicial_ars || 0;
-        patrimonioFinal = first.patrimonio_final_ars || 0;
-      } else {
-        // If no records, use current state
-        patrimonioInicial = 0;
-        patrimonioFinal = totalIngresos - totalGastos;
-      }
-
-      patrimonioFinal = patrimonioInicial + totalIngresos - totalGastos;
-
-      // Calculate 50/30/20 compliance from the resumen table
-      let cumplimientoNec = 0, cumplimientoDes = 0, cumplimientoAhorro = 0;
-      if (resumenData && resumenData.length > 0) {
-        const latest = resumenData[0];
-        cumplimientoNec = latest.cumplimiento_nec_pct || 0;
-        cumplimientoDes = latest.cumplimiento_des_pct || 0;
-        cumplimientoAhorro = latest.cumplimiento_ahorro_pct || 0;
-      }
-
-      setStats({
-        patrimonioInicial,
-        ingresosMes: totalIngresos,
-        gastosMes: totalGastos,
-        patrimonioFinal,
-        cumplimientoNec,
-        cumplimientoDes,
-        cumplimientoAhorro,
-      });
+      setError(null);
+      setIngresos((incomeResult.data as Ingreso[]) || []);
+      setGastos((expenseResult.data as Gasto[]) || []);
     } catch (err) {
-      console.error("Error fetching summary:", err);
-      setError("Error cargando el resumen. Por favor, inténtalo de nuevo.");
+      console.error("Error cargando el panel:", err);
+      setError("No pudimos cargar tus datos. Reintentá en un momento.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-8">
-        <div className="prose max-w-none">
-          <p>Cargando resumen...</p>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen p-8">
-        <div className="alert alert-error">
-          {error}
-          <button
-            onClick={() => {
-              setError(null);
-              fetchSummary();
-            }}
-            className="btn-link hover:underline"
-          >
-            Reintentar
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const monthly = useMemo(() => buildMonthly(ingresos, gastos), [ingresos, gastos]);
+  const currentKey = todayKey();
+  const currentIndex = monthly.findIndex((row) => row.clave === currentKey);
+  const current = currentIndex >= 0 ? monthly[currentIndex] : monthly[monthly.length - 1];
+  const previous = currentIndex > 0 ? monthly[currentIndex - 1] : undefined;
+  const movements = useMemo(
+    () => buildMovements(ingresos, gastos).slice(0, 9),
+    [ingresos, gastos]
+  );
+  const categories = useMemo(
+    () => topCategories(gastos, current?.clave || "", 5),
+    [gastos, current?.clave]
+  );
 
-  if (!stats) {
-    return <div className="p-8">No hay datos disponibles.</div>;
-  }
+  const ingresosMes = current?.ingresos ?? 0;
+  const gastosMes = current?.gastos ?? 0;
+  const patrimonio = current?.final ?? 0;
+  const balance = ingresosMes - gastosMes;
+  const variation = current?.variacion ?? 0;
+  const monthIngresosCount = ingresos.filter(
+    (row) => monthKeyOf(row.fecha) === current?.clave
+  ).length;
+  const monthGastosCount = gastos.filter(
+    (row) => monthKeyOf(row.fecha) === current?.clave
+  ).length;
 
-  const { patrimonioInicial, ingresosMes, gastosMes, patrimonioFinal, cumplimientoNec, cumplimientoDes, cumplimientoAhorro } = stats;
+  const budgets = [
+    {
+      label: "Necesidades",
+      targetPct: "50%",
+      spent: current?.necesidades ?? 0,
+      target: ingresosMes * RULE.necesidades,
+      variant: "progress",
+    },
+    {
+      label: "Deseos",
+      targetPct: "30%",
+      spent: current?.deseos ?? 0,
+      target: ingresosMes * RULE.deseos,
+      variant: "progress sky",
+    },
+    {
+      label: "Ahorro / Inversión",
+      targetPct: "20%",
+      spent: current?.ahorro ?? 0,
+      target: ingresosMes * RULE.ahorro,
+      variant: "progress mint",
+    },
+  ];
+
+  const maxCategory = categories.length > 0 ? categories[0].monto : 1;
 
   return (
-    <main className="max-w-5xl mx-auto p-6">
-      {/* Header */}
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-carbon-primary mb-2">Gastito</h1>
-        <p className="text-graphite-secondary">Resumen mensual de finanzas personales</p>
-      </header>
+    <>
+      <TopNav />
+      <main className="container page">
+        <section className="hero">
+          <div className="hero-grid">
+            <div>
+              <span className="kicker">Panel 50 / 30 / 20</span>
+              <h1 className="hero-title">
+                Tus finanzas, <span className="gradient-text">claras</span>.
+              </h1>
+              <p className="lead">
+                Patrimonio, ingresos y gastos de tu plantilla en un solo lugar.
+                Cargá un movimiento hablando o escribiendo y el panel se ordena
+                solo.
+              </p>
 
-      {/* Key Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Patrimonio Card */}
-        <div className="card-warm shadow-warm p-6">
-          <p className="text-ashen-secondary text-sm uppercase tracking-wider mb-2">Patrimonio</p>
-          <p className="text-4xl font-bold text-carbon-primary">{patrimonioFinal.toLocaleString()} ARS</p>
-          <p className="text-sm text-graphite-secondary">
-            {patrimonioInicial > 0 ? `+${(patrimonioFinal - patrimonioInicial).toLocaleString()} ARS` : "En construcción"}
-          </p>
-        </div>
+              <QuickAdd onSaved={load} />
 
-        {/* Ingresos del Mes Card */}
-        <div className="card-warm shadow-warm p-6">
-          <p className="text-ashen-secondary text-sm uppercase tracking-wider mb-2">Ingresos Mes</p>
-          <p className="text-4xl font-bold text-carbon-primary">{ingresosMes.toLocaleString()} ARS</p>
-        </div>
-
-        {/* Gastos del Mes Card */}
-        <div className="card-warm shadow-warm p-6">
-          <p className="text-ashen-secondary text-sm uppercase tracking-wider mb-2">Gastos Mes</p>
-          <p className="text-4xl font-bold text-carbon-primary">{gastosMes.toLocaleString()} ARS</p>
-          <p className="text-sm text-graphite-secondary">
-            {ingresosMes > gastosMes ? "Superávit" : "Déficit"}
-          </p>
-        </div>
-
-        {/* Cumplimiento 50/30/20 Card */}
-        <div className="card-warm shadow-warm p-6">
-          <p className="text-ashen-secondary text-sm uppercase tracking-wider mb-2">Regla 50/30/20</p>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm mb-1">
-              <span className="text-graphite-secondary">Necesidades (50%)</span>
-              <span>{(Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 50, 50).toFixed(1))}%</span>
+              <ul className="chips" style={{ marginTop: 18 }}>
+                <li>
+                  <span className="dot" /> Regla 50/30/20
+                </li>
+                <li>
+                  <span className="dot" /> Patrimonio mes a mes
+                </li>
+                <li>
+                  <span className="dot" /> Multi moneda
+                </li>
+              </ul>
             </div>
-            <div className="w-full bg-[var(--border)] rounded-full h-2">
+
+            <aside
+              className="card"
+              style={{
+                background:
+                  "linear-gradient(155deg, #ffffff 0%, #ffffff 52%, #fdebe7 100%)",
+                padding: 26,
+              }}
+            >
               <div
-                className="h-full rounded-tl-md rounded-bl-md bg-[var(--clay)]"
-                style={{ width: `${Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 50, 50)}%` }}
-              ></div>
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span className="badge badge-necesidades">
+                  {monthLabel(current?.clave || currentKey, true)}
+                </span>
+                <span
+                  className={`trend ${variation >= 0 ? "up" : "down"}`}
+                  title="Variación del patrimonio en el mes"
+                >
+                  {variation >= 0 ? "▲" : "▼"} {signed(variation, compactMoney)}
+                </span>
+              </div>
+
+              <p className="stat-label" style={{ marginTop: 22 }}>
+                Patrimonio al cierre
+              </p>
+              <p
+                style={{
+                  margin: "4px 0 2px",
+                  fontSize: "clamp(32px, 4.2vw, 44px)",
+                  fontWeight: 900,
+                  letterSpacing: "-0.035em",
+                  lineHeight: 1.05,
+                }}
+              >
+                {compactMoney(patrimonio)}
+              </p>
+              <p className="muted" style={{ margin: 0, fontWeight: 600, fontSize: 13 }}>
+                {previous
+                  ? `Venís de ${compactMoney(previous.final)} en ${monthLabel(
+                      previous.clave
+                    )}`
+                  : "Punto de partida de tu plantilla"}
+              </p>
+
+              <div className="divider" />
+
+              <div style={{ display: "grid", gap: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span className="soft" style={{ fontWeight: 700 }}>
+                    Ingresos
+                  </span>
+                  <strong>{compactMoney(ingresosMes)}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span className="soft" style={{ fontWeight: 700 }}>
+                    Gastos
+                  </span>
+                  <strong>{compactMoney(gastosMes)}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span className="soft" style={{ fontWeight: 700 }}>
+                    Balance del mes
+                  </span>
+                  <strong style={{ color: balance >= 0 ? "var(--mint-ink)" : "var(--brand-ink)" }}>
+                    {signed(balance, compactMoney)}
+                  </strong>
+                </div>
+              </div>
+
+              <Link
+                href="/patrimonio"
+                className="btn btn-ghost btn-sm"
+                style={{ width: "100%", marginTop: 18 }}
+              >
+                Ver evolución completa
+              </Link>
+            </aside>
+          </div>
+        </section>
+
+        {error ? (
+          <div className="alert" style={{ marginBottom: 20 }}>
+            {error}
+            <button className="btn-accent" onClick={load} type="button">
+              Reintentar
+            </button>
+          </div>
+        ) : null}
+
+        <section className="stat-grid" aria-label="Indicadores del mes">
+          <div className="stat">
+            <span className="stat-label">Ingresos del mes</span>
+            <span className="stat-value">{loading ? "—" : compactMoney(ingresosMes)}</span>
+            <span className="stat-foot">
+              <span className="trend up">{monthIngresosCount} mov.</span>
+              {previous ? (
+                <span>{`vs. ${monthLabel(previous.clave)}: ${compactMoney(
+                  previous.ingresos
+                )}`}</span>
+              ) : null}
+            </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Gastos del mes</span>
+            <span className="stat-value">{loading ? "—" : compactMoney(gastosMes)}</span>
+            <span className="stat-foot">
+              <span className="trend down">{monthGastosCount} mov.</span>
+              {previous ? (
+                <span>{`vs. ${monthLabel(previous.clave)}: ${compactMoney(
+                  previous.gastos
+                )}`}</span>
+              ) : null}
+            </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Balance del mes</span>
+            <span className="stat-value">{loading ? "—" : signed(balance, compactMoney)}</span>
+            <span className="stat-foot">
+              <span className={`trend ${balance >= 0 ? "up" : "down"}`}>
+                {balance >= 0 ? "Superávit" : "Déficit"}
+              </span>
+              <span>
+                {ingresosMes > 0 ? pct((balance / ingresosMes) * 100) : "Sin ingresos"}
+              </span>
+            </span>
+          </div>
+
+          <div className="stat">
+            <span className="stat-label">Patrimonio actual</span>
+            <span className="stat-value">{loading ? "—" : compactMoney(patrimonio)}</span>
+            <span className="stat-foot">
+              <span className={`trend ${variation >= 0 ? "up" : "down"}`}>
+                {signed(variation, compactMoney)}
+              </span>
+              <span>en el mes</span>
+            </span>
+          </div>
+        </section>
+
+        <section className="grid-2" style={{ marginTop: 18 }}>
+          <div className="chart-box">
+            <div className="section-head" style={{ marginBottom: 4 }}>
+              <div>
+                <h3>Evolución del patrimonio</h3>
+                <p className="chart-sub">Cierre estimado de cada mes de tu plantilla.</p>
+              </div>
+              <span className="badge badge-ahorro">2026</span>
             </div>
-            <div className="flex justify-between text-xs text-ashen-secondary">
-              <span>{Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 50, 50).toFixed(0)}%</span>
-              <span>{Math.max(50 - Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 50, 50), 0).toFixed(0)}%</span>
+            <PatrimonioChart rows={monthly} />
+          </div>
+
+          <div className="chart-box">
+            <div className="section-head" style={{ marginBottom: 4 }}>
+              <div>
+                <h3>Flujo mensual</h3>
+                <p className="chart-sub">Ingresos y gastos de los últimos meses.</p>
+              </div>
+            </div>
+            <FlujoBars rows={monthly} />
+          </div>
+        </section>
+
+        <section className="grid-2" style={{ marginTop: 18 }}>
+          <div className="card">
+            <div className="section-head">
+              <div>
+                <h2>Regla 50 / 30 / 20</h2>
+                <p>Cómo se reparte el ingreso de {monthLabel(current?.clave || currentKey, true)}.</p>
+              </div>
+            </div>
+
+            {ingresosMes === 0 ? (
+              <div className="card-soft" style={{ marginBottom: 18 }}>
+                <strong style={{ display: "block", marginBottom: 2 }}>
+                  Todavía no hay ingresos este mes
+                </strong>
+                <span className="muted" style={{ fontSize: 13.5 }}>
+                  Igual mostramos tus gastos para que veas cómo venís. Cargá un
+                  ingreso y los objetivos se calculan solos.
+                </span>
+              </div>
+            ) : null}
+
+            {budgets.map((item) => {
+              const share = ingresosMes > 0 ? (item.spent / ingresosMes) * 100 : 0;
+              const fill =
+                item.target > 0
+                  ? Math.min((item.spent / item.target) * 100, 100)
+                  : item.spent > 0
+                    ? 100
+                    : 0;
+              const rest = item.target - item.spent;
+              return (
+                <div className="progress-item" key={item.label}>
+                  <div className="progress-row">
+                    <span>
+                      {item.label}{" "}
+                      <span className="muted" style={{ fontWeight: 700 }}>
+                        ({item.targetPct})
+                      </span>
+                    </span>
+                    <span className="pct">
+                      {ars(item.spent)}
+                      <span className="muted" style={{ fontWeight: 700 }}>
+                        {" "}
+                        / {ars(item.target)}
+                      </span>
+                    </span>
+                  </div>
+                  <div className={item.variant}>
+                    <span style={{ width: `${fill}%` }} />
+                  </div>
+                  <div className="progress-meta">
+                    <span>{ingresosMes > 0 ? `${pct(share)} del ingreso` : "Sin ingresos"}</span>
+                    <span style={{ color: rest < 0 ? "var(--brand-ink)" : undefined }}>
+                      {rest < 0 ? `Excedido ${ars(Math.abs(rest))}` : `Disponible ${ars(rest)}`}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="card">
+            <div className="section-head">
+              <div>
+                <h2>Dónde se fue la plata</h2>
+                <p>Top categorías de {monthLabel(current?.clave || currentKey)}.</p>
+              </div>
+            </div>
+
+            {categories.length === 0 ? (
+              <div className="empty">Sin gastos registrados este mes.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 14 }}>
+                {categories.map((item) => (
+                  <div key={item.categoria}>
+                    <div className="progress-row" style={{ marginBottom: 4 }}>
+                      <span>{item.categoria}</span>
+                      <span>{ars(item.monto)}</span>
+                    </div>
+                    <div className="progress">
+                      <span
+                        style={{
+                          width: `${Math.max((item.monto / maxCategory) * 100, 4)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Link
+              href="/gastos"
+              className="btn btn-ghost btn-sm"
+              style={{ width: "100%", marginTop: 18 }}
+            >
+              Ver todos los gastos
+            </Link>
+          </div>
+        </section>
+
+        <section style={{ marginTop: 18 }}>
+          <div className="section-head">
+            <div>
+              <h2>Evolución mensual</h2>
+              <p>El mismo seguimiento de patrimonio de tu Excel, mes a mes.</p>
+            </div>
+            <Link href="/patrimonio" className="btn btn-ghost btn-sm">
+              Abrir patrimonio
+            </Link>
+          </div>
+
+          <div className="table-wrap">
+            <table className="table-warm">
+              <thead>
+                <tr>
+                  <th>Mes</th>
+                  <th>Patrimonio inicial</th>
+                  <th>Ingresos</th>
+                  <th>Gastos</th>
+                  <th>Patrimonio final</th>
+                  <th>Variación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthly
+                  .slice()
+                  .reverse()
+                  .map((row) => {
+                    const active = row.clave === current?.clave;
+                    return (
+                      <tr key={row.clave}>
+                        <td style={{ fontWeight: 900 }}>
+                          {monthLabel(row.clave, true)}
+                          {active ? (
+                            <span
+                              className="badge badge-necesidades"
+                              style={{ marginLeft: 8 }}
+                            >
+                              actual
+                            </span>
+                          ) : null}
+                        </td>
+                        <td>{ars(row.inicial)}</td>
+                        <td style={{ color: "var(--mint-ink)", fontWeight: 800 }}>
+                          {ars(row.ingresos)}
+                        </td>
+                        <td style={{ color: "var(--brand-ink)", fontWeight: 800 }}>
+                          {ars(row.gastos)}
+                        </td>
+                        <td style={{ fontWeight: 900 }}>{ars(row.final)}</td>
+                        <td
+                          style={{
+                            fontWeight: 800,
+                            color: row.variacion >= 0 ? "var(--mint-ink)" : "var(--brand-ink)",
+                          }}
+                        >
+                          {signed(row.variacion, ars)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="grid-2" style={{ marginTop: 18 }}>
+          <div className="card">
+            <div className="section-head">
+              <div>
+                <h2>Últimos movimientos</h2>
+                <p>Lo más reciente de tu plantilla.</p>
+              </div>
+              <Link href="/carga-rapida" className="btn btn-ghost btn-sm">
+                Cargar
+              </Link>
+            </div>
+
+            {movements.length === 0 ? (
+              <div className="empty">Todavía no hay movimientos.</div>
+            ) : (
+              <div>
+                {movements.map((movement) => (
+                  <div className="movement" key={`${movement.tipo}-${movement.id}`}>
+                    <div className={`movement-icon ${movement.tipo}`}>
+                      {movement.tipo === "ingreso" ? "↑" : "↓"}
+                    </div>
+                    <div className="movement-main">
+                      <div className="movement-title">{movement.titulo}</div>
+                      <div className="movement-sub">
+                        {dateLabel(movement.fecha)}
+                        {movement.detalle ? ` · ${movement.detalle}` : ""}
+                      </div>
+                    </div>
+                    <div>
+                      <div className={`movement-amount ${movement.tipo}`}>
+                        {movement.tipo === "ingreso" ? "+" : "−"} {ars(movement.monto)}
+                      </div>
+                      {movement.tipo503020 ? (
+                        <div style={{ textAlign: "right", marginTop: 3 }}>
+                          <span
+                            className={`badge ${
+                              movement.tipo503020 === "Necesidades"
+                                ? "badge-necesidades"
+                                : movement.tipo503020 === "Ahorro"
+                                  ? "badge-ahorro"
+                                  : "badge-deseos"
+                            }`}
+                          >
+                            {movement.tipo503020}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="section-head">
+              <div>
+                <h2>Cargar y revisar</h2>
+                <p>Todo lo que necesitás para seguir al día.</p>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <Link href="/carga-rapida" className="btn btn-primary" style={{ width: "100%" }}>
+                Carga rápida por texto o voz
+              </Link>
+              <Link href="/ingresos" className="btn btn-ghost" style={{ width: "100%" }}>
+                Registrar ingreso
+              </Link>
+              <Link href="/gastos" className="btn btn-ghost" style={{ width: "100%" }}>
+                Registrar gasto
+              </Link>
+              <Link href="/patrimonio" className="btn btn-ghost" style={{ width: "100%" }}>
+                Revisar patrimonio
+              </Link>
+            </div>
+
+            <div className="card-soft" style={{ marginTop: 16 }}>
+              <strong style={{ display: "block", marginBottom: 4 }}>
+                Tip de carga
+              </strong>
+              <span className="muted" style={{ fontSize: 13.5, fontWeight: 600 }}>
+                Escribí “Gasti 4500 en muzzarella en efectivo” y el sistema detecta
+                monto, medio de pago y categoría 50/30/20.
+              </span>
             </div>
           </div>
-
-          <div className="mt-3 flex justify-between text-sm mb-1">
-            <span className="text-graphite-secondary">Deseos (30%)</span>
-            <span>{Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 30, 30).toFixed(1)}%</span>
-          </div>
-          <div className="w-full bg-[var(--border)] rounded-full h-2">
-            <div
-              className="h-full rounded-tl-md rounded-bl-md bg-[var(--clay)]"
-              style={{ width: `${Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 30, 30)}%` }}
-            ></div>
-          </div>
-          <div className="flex justify-between text-xs text-ashen-secondary">
-            <span>{Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 30, 30).toFixed(0)}%</span>
-            <span>{Math.max(30 - Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 30, 30), 0).toFixed(0)}%</span>
-          </div>
-
-          <div className="mt-3 flex justify-between text-sm mb-1">
-            <span className="text-graphite-secondary">Ahorro/Inversión (20%)</span>
-            <span>{Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 20, 20).toFixed(1)}%</span>
-          </div>
-          <div className="w-full bg-[var(--border)] rounded-full h-2">
-            <div
-              className="h-full rounded-tl-md rounded-bl-md bg-[var(--clay)]"
-              style={{ width: `${Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 20, 20)}%` }}
-            ></div>
-          </div>
-          <div className="flex justify-between text-xs text-ashen-secondary">
-            <span>{Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 20, 20).toFixed(0)}%</span>
-            <span>{Math.max(20 - Math.min((ingresosMes / Math.max(ingresosMes, 1)) * 20, 20), 0).toFixed(0)}%</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts / Evolution Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-        {/* Patrimonio Evolution */}
-        <div className="card-warm shadow-warm p-6">
-          <p className="text-ashen-secondary text-sm uppercase tracking-wider mb-4">Evolución del Patrimonio</p>
-          <p className="text-sm text-ashen-secondary">(Próximamente - gráfico de línea mensual)</p>
-        </div>
-
-        {/* Monthly Breakdown */}
-        <div className="card-warm shadow-warm p-6">
-          <p className="text-ashen-secondary text-sm uppercase tracking-wider mb-4">Desglose Mensual</p>
-          <p className="text-sm text-ashen-secondary">(Próximamente - tabla por mes)</p>
-        </div>
-      </div>
-
-      {/* Quick Action Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-6">
-        <button
-          onClick={() => { window.location.href = "/ingresos"; }}
-          className="btn-primary w-full">
-          Agregar Ingreso
-        </button>
-        <button
-          onClick={() => { window.location.href = "/gastos"; }}
-          className="btn-primary w-full">
-          Agregar Gasto
-        </button>
-        <button
-          onClick={() => { window.location.href = "/carga-rapida"; }}
-          className="btn-accent w-full text-[var(--clay)] border border-[var(--clay)]">
-          Carga Rápida (Texto/Voz)
-        </button>
-        <button
-          onClick={() => { window.location.href = "/patrimonio"; }}
-          className="btn-primary w-full">
-          Ver Patrimonio
-        </button>
-      </div>
-    </main>
+        </section>
+      </main>
+    </>
   );
 }

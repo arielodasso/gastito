@@ -1,376 +1,469 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/supabaseClient";
+import TopNav from "@/app/components/TopNav";
+import { amountOf, monthKeyOf, type Gasto } from "@/app/lib/finance";
+import { ars, compactMoney, dateLabel, todayKey } from "@/app/lib/format";
 
-interface Gasto {
-  id: string;
-  fecha: string;
-  concepto: string;
-  categoria: string;
-  tipo_503020: "Necesidades" | "Deseos" | "Ahorro";
-  monto: number;
-  moneda: string;
-  tipo_cambio_ars: number;
-  monto_ars: number;
-  medio_pago: "Efectivo" | "Débito" | "Transferencia" | "Tarjeta Crédito" | "Cheque" | "Otro";
-  fijo_variable: "Fijo" | "Variable";
-  mes_clave: string;
-  impacta_resultados: boolean;
-}
+const CATEGORIES = [
+  "Ocio",
+  "Comida (delivery/salidas)",
+  "Comida (super)",
+  "Transporte",
+  "Herramientas de trabajo (SaaS)",
+  "Celular",
+  "Salud",
+  "Tarjeta de crédito",
+  "Monotributo/Impuestos",
+  "Regalos",
+  "Internet",
+  "Obra social",
+  "Ropa",
+  "Ahorro",
+  "Educación",
+  "Servicios (luz/gas/agua)",
+  "Alquiler",
+  "Expensas",
+  "Otros",
+];
 
-export default function Gastos() {
+const EMPTY_FORM = {
+  fecha: new Date().toISOString().slice(0, 10),
+  concepto: "",
+  categoria: "Ocio",
+  tipo_503020: "Deseos",
+  monto: "",
+  moneda: "ARS",
+  tipo_cambio_ars: "1",
+  medio_pago: "Débito",
+  fijo_variable: "Variable",
+  impacta_resultados: "true",
+};
+
+export default function GastosPage() {
   const [gastos, setGastos] = useState<Gasto[]>([]);
-  const [nuevoGasto, setNuevoGasto] = useState<Partial<Gasto>>({
-    fecha: new Date().toISOString().split("T")[0],
-    concepto: "",
-    categoria: "",
-    tipo_503020: "Deseos",
-    monto: 0,
-    moneda: "ARS",
-    tipo_cambio_ars: 1,
-    medio_pago: "Efectivo",
-    fijo_variable: "Variable",
-    mes_clave: "",
-    impacta_resultados: true,
-  });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchGastos();
+  const load = useCallback(async () => {
+    const { data, error: loadError } = await supabase
+      .from("gastos")
+      .select(
+        "id,fecha,concepto,categoria,tipo_503020,monto,moneda,monto_ars,medio_pago,fijo_variable"
+      )
+      .order("fecha", { ascending: false });
+    if (loadError) {
+      setError("No pudimos cargar los gastos.");
+    } else {
+      setGastos((data as Gasto[]) || []);
+      setError(null);
+    }
+    setLoading(false);
   }, []);
 
-  async function fetchGastos() {
-    try {
-      const { data, error } = await supabase
-        .from("gastos")
-        .select("*")
-        .order("fecha", { ascending: false });
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+  }, [load]);
 
-      if (error) throw error;
-      setGastos(data || []);
-      setLoading(false);
-    } catch (err) {
-      console.error("Error fetching gastos:", err);
-      setError("Error cargando gastos");
-      setLoading(false);
+  const total = useMemo(
+    () => gastos.reduce((sum, row) => sum + amountOf(row), 0),
+    [gastos]
+  );
+  const currentMonth = todayKey();
+  const monthGastos = useMemo(
+    () => gastos.filter((row) => monthKeyOf(row.fecha) === currentMonth),
+    [gastos, currentMonth]
+  );
+  const monthTotal = monthGastos.reduce((sum, row) => sum + amountOf(row), 0);
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const monto = Number(form.monto);
+    if (!form.concepto.trim() || !Number.isFinite(monto) || monto <= 0) {
+      setError("Completá el concepto y un monto mayor a cero.");
+      return;
     }
-  }
 
-  async function handleSubmit() {
-    if (!nuevoGasto.concepto || (nuevoGasto.monto ?? 0) <= 0) return;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
 
-    const mesClave = new Date(nuevoGasto.fecha ?? Date.now()).toLocaleString("es-ES", { month: "long", year: "numeric" });
-
-    const { data, error } = await supabase
+    const { data, error: insertError } = await supabase
       .from("gastos")
-      .insert([{
-        id: crypto.randomUUID(),
-        fecha: nuevoGasto.fecha,
-        concepto: nuevoGasto.concepto,
-        categoria: nuevoGasto.categoria,
-        tipo_503020: nuevoGasto.tipo_503020,
-        monto: nuevoGasto.monto,
-        moneda: nuevoGasto.moneda,
-        tipo_cambio_ars: nuevoGasto.tipo_cambio_ars,
-        medio_pago: nuevoGasto.medio_pago,
-        fijo_variable: nuevoGasto.fijo_variable,
-        mes_clave: mesClave,
-        impacta_resultados: nuevoGasto.impacta_resultados,
-      }])
-      .select()
+      .insert([
+        {
+          id: crypto.randomUUID(),
+          fecha: form.fecha,
+          concepto: form.concepto.trim(),
+          categoria: form.categoria,
+          tipo_503020: form.tipo_503020,
+          monto,
+          moneda: form.moneda,
+          tipo_cambio_ars: Number(form.tipo_cambio_ars) || 1,
+          medio_pago: form.medio_pago,
+          fijo_variable: form.fijo_variable,
+          mes_clave: form.fecha.slice(0, 7),
+          impacta_resultados: form.impacta_resultados === "true",
+        },
+      ])
+      .select("*")
       .single();
 
-    if (error) throw error;
-    setGastos([data!, ...gastos]);
-    setNuevoGasto({
-      fecha: new Date().toISOString().split("T")[0],
-      concepto: "",
-      categoria: "",
-      tipo_503020: "Deseos",
-      monto: 0,
-      moneda: "ARS",
-      tipo_cambio_ars: 1,
-      medio_pago: "Efectivo",
-      fijo_variable: "Variable",
-      mes_clave: "",
-      impacta_resultados: true,
-    });
+    if (insertError) {
+      setError("No se pudo guardar el gasto.");
+    } else {
+      setGastos((rows) => [data as Gasto, ...rows]);
+      setForm({ ...EMPTY_FORM, fecha: form.fecha });
+      setNotice("Gasto guardado.");
+    }
+    setSaving(false);
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Seguro que quieres eliminar este gasto?")) return;
-    const { error } = await supabase.from("gastos").delete().eq("id", id);
-    if (error) throw error;
-    setGastos(gastos.filter((g) => g.id !== id));
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-8">
-        <div className="prose max-w-none">Cargando gastos...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen p-8">
-        <div className="alert alert-error">{error}<button onClick={() => fetchGastos()} className="btn-link hover:underline">Reintentar</button></div>
-      </div>
-    );
+    if (!window.confirm("¿Eliminar este gasto?")) return;
+    const { error: deleteError } = await supabase.from("gastos").delete().eq("id", id);
+    if (deleteError) {
+      setError("No se pudo eliminar el gasto.");
+      return;
+    }
+    setGastos((rows) => rows.filter((row) => row.id !== id));
   }
 
   return (
-    <main className="max-w-5xl mx-auto p-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold text-carbon-primary">Gastos</h1>
-        <p className="text-graphite-secondary text-sm">Registra tus egresos</p>
-      </header>
-
-      {/* Add Expense Form */}
-      <div className="card-warm shadow-warm p-6 mb-6">
-        <h2 className="text-xl font-semibold text-carbon-primary mb-4">Nuevo Gasto</h2>
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            handleSubmit();
-          }}
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Fecha</label>
-              <input
-                type="date"
-                value={nuevoGasto.fecha}
-                onChange={(e) =>
-                  setNuevoGasto({ ...nuevoGasto, fecha: e.target.value })
-                }
-                className="input-warm"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Concepto</label>
-              <input
-                value={nuevoGasto.concepto}
-                onChange={(e) =>
-                  setNuevoGasto({ ...nuevoGasto, concepto: e.target.value })
-                }
-                className="input-warm"
-                placeholder="Ej: Palmeritas para merienda"
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="text-sm text-graphite-secondary block mb-1">Categoría</label>
-              <select
-                value={nuevoGasto.categoria}
-                onChange={(e) =>
-                  setNuevoGasto({ ...nuevoGasto, categoria: e.target.value })
-                }
-                className="input-warm"
-              >
-                <option value="Comida (delivery/salidas)">Comida (delivery/salidas)</option>
-                <option value="Internet">Internet</option>
-                <option value="Regalos">Regalos</option>
-                <option value="Salud">Salud</option>
-                <option value="Transporte">Transporte</option>
-                <option value="Otros">Otros</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Tipo 50/30/20</label>
-              <select
-                value={nuevoGasto.tipo_503020}
-                onChange={(e) =>
-                  setNuevoGasto({ ...nuevoGasto, tipo_503020: e.target.value as any })
-                }
-                className="input-warm"
-              >
-                <option value="Necesidades">Necesidades</option>
-                <option value="Deseos">Deseos</option>
-                <option value="Ahorro">Ahorro/Inversión</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Medio de Pago</label>
-              <select
-                value={nuevoGasto.medio_pago}
-                onChange={(e) =>
-                  setNuevoGasto({ ...nuevoGasto, medio_pago: e.target.value as any })
-                }
-                className="input-warm"
-              >
-                <option value="Efectivo">Efectivo</option>
-                <option value="Débito">Débito</option>
-                <option value="Transferencia">Transferencia</option>
-                <option value="Tarjeta Crédito">Tarjeta Crédito</option>
-                <option value="Cheque">Cheque</option>
-                <option value="Otro">Otro</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Fijo/Variable</label>
-              <select
-                value={nuevoGasto.fijo_variable}
-                onChange={(e) =>
-                  setNuevoGasto({ ...nuevoGasto, fijo_variable: e.target.value as any })
-                }
-                className="input-warm"
-              >
-                <option value="Fijo">Fijo</option>
-                <option value="Variable">Variable</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Monto</label>
-              <input
-                type="number"
-                value={nuevoGasto.monto}
-                onChange={(e) =>
-                  setNuevoGasto({ ...nuevoGasto, monto: Number(e.target.value) })
-                }
-                className="input-warm"
-                min="0"
-                step="100"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Moneda</label>
-              <select
-                value={nuevoGasto.moneda}
-                onChange={(e) =>
-                  setNuevoGasto({ ...nuevoGasto, moneda: e.target.value })
-                }
-                className="input-warm"
-              >
-                <option value="ARS">ARS (Peso Argentino)</option>
-                <option value="USD">USD (Dólar)</option>
-                <option value="EUR">EUR (Euro)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-graphite-secondary block mb-1">Tipo de Cambio a ARS</label>
-              <input
-                type="number"
-                value={nuevoGasto.tipo_cambio_ars}
-                onChange={(e) =>
-                  setNuevoGasto({ ...nuevoGasto, tipo_cambio_ars: Number(e.target.value) })
-                }
-                className="input-warm"
-                min="0"
-                step="0.0001"
-                placeholder="1 USD = X ARS"
-              />
-            </div>
-          </div>
-
+    <>
+      <TopNav />
+      <main className="container page">
+        <div className="section-head">
           <div>
-            <label className="text-sm text-graphite-secondary block mb-1">Impacta Resultados</label>
-            <select
-              value={String(nuevoGasto.impacta_resultados ?? true)}
-              onChange={(e) =>
-                setNuevoGasto({ ...nuevoGasto, impacta_resultados: e.target.value === "true" })
-              }
-              className="input-warm"
-            >
-              <option value="true">Sí</option>
-              <option value="false">No</option>
-            </select>
+            <span className="kicker">Gastos</span>
+            <h2>Todo lo que sale</h2>
+            <p>Registrá cada gasto y clasificalo para que el 50/30/20 cierre.</p>
           </div>
+          <Link href="/" className="btn btn-ghost btn-sm">
+            Volver al resumen
+          </Link>
+        </div>
 
-          <button
-            type="submit"
-            className="btn-primary w-full mt-4"
-          >
-            Registrar Gasto
-          </button>
-        </form>
-      </div>
+        <div
+          className="stat-grid"
+          style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+        >
+          <div className="stat">
+            <span className="stat-label">Total histórico</span>
+            <span className="stat-value">{compactMoney(total)}</span>
+            <span className="stat-foot">{gastos.length} movimientos</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">Este mes</span>
+            <span className="stat-value">{compactMoney(monthTotal)}</span>
+            <span className="stat-foot">{monthGastos.length} movimientos</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">Promedio por movimiento</span>
+            <span className="stat-value">
+              {compactMoney(gastos.length ? total / gastos.length : 0)}
+            </span>
+            <span className="stat-foot">En ARS</span>
+          </div>
+        </div>
 
-      {/* Expenses List */}
-      {gastos.length === 0 && (
-        <p className="text-ashen-secondary mt-4">No hay gastos registrados. Usa el formulario de arriba para agregar uno.</p>
-      )}
+        {error ? (
+          <div className="alert" style={{ marginTop: 18 }}>
+            {error}
+            <button className="btn-accent" type="button" onClick={load}>
+              Reintentar
+            </button>
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="alert" style={{ marginTop: 18, color: "var(--mint-ink)", background: "#e7f8f1", borderColor: "#bcebd9" }}>
+            {notice}
+          </div>
+        ) : null}
 
-      <div className="overflow-x-auto mt-6">
-        <table className="table-warm">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Concepto</th>
-              <th>Categoría</th>
-              <th>Tipo 50/30/20</th>
-              <th>Monto (ARS)</th>
-              <th>Medio Pago</th>
-              <th>Fijo/Variable</th>
-              <th>Impacta</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {gastos.map((gasto) => (
-              <tr key={gasto.id} className="border-b warm-border">
-                <td className="font-medium">{new Date(gasto.fecha).toLocaleDateString("es-ES")}</td>
-                <td>{gasto.concepto}</td>
-                <td>
-                  <span
-                    className={gasto.tipo_503020 === "Necesidades"
-                      ? "badge-necesidades"
-                      : gasto.tipo_503020 === "Deseos"
-                        ? "badge-deseos"
-                        : "badge-ahorro"}
-                  >
-                    {gasto.tipo_503020}
-                  </span>
-                </td>
-                <td>{gasto.monto_ars.toLocaleString("es-AR")} ARS</td>
-                <td>
-                  <span className={`badge-${gasto.medio_pago}`}>{gasto.medio_pago}</span>
-                </td>
-                <td>
-                  <span className={gasto.fijo_variable === "Fijo" ? "text-carbon-primary" : "text-graphite-secondary"}>
-                    {gasto.fijo_variable}
-                  </span>
-                </td>
-                <td>
-                  <span
-                    className={gasto.impacta_resultados ? "badge-si" : "badge-no"}
-                  >
-                    {gasto.impacta_resultados ? "Sí" : "No"}
-                  </span>
-                </td>
-                <td>
-                  <button
-                    onClick={() => { window.location.href = `/gastos/editar/${gasto.id}`; }}
-                    className="text-[var(--clay)] text-sm hover:underline"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(gasto.id)}
-                    className="text-red-600 text-sm hover:underline ml-2"
-                  >
-                    Eliminar
-                  </button>
-                </td>
+        <div className="grid-2" style={{ marginTop: 18, alignItems: "start" }}>
+          <form className="card" onSubmit={handleSubmit}>
+            <p className="form-section-title">Nuevo gasto</p>
+            <p className="form-section-sub">
+              Elegí el tipo 50/30/20 para que el panel sepa dónde ubicarlo.
+            </p>
+
+            <div className="form-grid">
+              <div className="form-field">
+                <label className="form-label" htmlFor="fecha">
+                  Fecha
+                </label>
+                <input
+                  id="fecha"
+                  type="date"
+                  className="input-warm"
+                  value={form.fecha}
+                  onChange={(event) => setForm({ ...form, fecha: event.target.value })}
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="concepto">
+                  Concepto
+                </label>
+                <input
+                  id="concepto"
+                  className="input-warm"
+                  placeholder="Ej: Sushi con amigos"
+                  value={form.concepto}
+                  onChange={(event) => setForm({ ...form, concepto: event.target.value })}
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="categoria">
+                  Categoría
+                </label>
+                <select
+                  id="categoria"
+                  className="input-warm"
+                  value={form.categoria}
+                  onChange={(event) => setForm({ ...form, categoria: event.target.value })}
+                >
+                  {CATEGORIES.map((category) => (
+                    <option key={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="tipo">
+                  Tipo 50/30/20
+                </label>
+                <select
+                  id="tipo"
+                  className="input-warm"
+                  value={form.tipo_503020}
+                  onChange={(event) =>
+                    setForm({ ...form, tipo_503020: event.target.value })
+                  }
+                >
+                  <option>Necesidades</option>
+                  <option>Deseos</option>
+                  <option>Ahorro</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="monto">
+                  Monto
+                </label>
+                <input
+                  id="monto"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="input-warm"
+                  placeholder="0"
+                  value={form.monto}
+                  onChange={(event) => setForm({ ...form, monto: event.target.value })}
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="moneda">
+                  Moneda
+                </label>
+                <select
+                  id="moneda"
+                  className="input-warm"
+                  value={form.moneda}
+                  onChange={(event) => setForm({ ...form, moneda: event.target.value })}
+                >
+                  <option value="ARS">ARS</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="cambio">
+                  Tipo de cambio a ARS
+                </label>
+                <input
+                  id="cambio"
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  className="input-warm"
+                  value={form.tipo_cambio_ars}
+                  onChange={(event) =>
+                    setForm({ ...form, tipo_cambio_ars: event.target.value })
+                  }
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="medio">
+                  Medio de pago
+                </label>
+                <select
+                  id="medio"
+                  className="input-warm"
+                  value={form.medio_pago}
+                  onChange={(event) => setForm({ ...form, medio_pago: event.target.value })}
+                >
+                  <option>Efectivo</option>
+                  <option>Débito</option>
+                  <option>Transferencia</option>
+                  <option>Tarjeta Crédito</option>
+                  <option>Cheque</option>
+                  <option>Otro</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="fijo">
+                  Fijo / Variable
+                </label>
+                <select
+                  id="fijo"
+                  className="input-warm"
+                  value={form.fijo_variable}
+                  onChange={(event) =>
+                    setForm({ ...form, fijo_variable: event.target.value })
+                  }
+                >
+                  <option>Fijo</option>
+                  <option>Variable</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="impacta">
+                  Impacta resultados
+                </label>
+                <select
+                  id="impacta"
+                  className="input-warm"
+                  value={form.impacta_resultados}
+                  onChange={(event) =>
+                    setForm({ ...form, impacta_resultados: event.target.value })
+                  }
+                >
+                  <option value="true">Sí</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+            </div>
+
+            <button className="btn-primary" type="submit" style={{ width: "100%", marginTop: 16 }} disabled={saving}>
+              {saving ? "Guardando…" : "Registrar gasto"}
+            </button>
+          </form>
+
+          <div className="card">
+            <p className="form-section-title">Atajos</p>
+            <p className="form-section-sub">
+              Lo más rápido: “Gasti 4500 en muzzarella en efectivo” y que el
+              sistema clasifique todo.
+            </p>
+            <div style={{ display: "grid", gap: 10 }}>
+              <Link href="/carga-rapida" className="btn btn-primary">
+                Carga rápida
+              </Link>
+              <Link href="/ingresos" className="btn btn-ghost">
+                Ir a ingresos
+              </Link>
+              <Link href="/patrimonio" className="btn btn-ghost">
+                Ver patrimonio
+              </Link>
+            </div>
+
+            <div className="card-soft" style={{ marginTop: 16 }}>
+              <strong style={{ display: "block", marginBottom: 4 }}>
+                Categorías del Excel
+              </strong>
+              <span className="muted" style={{ fontSize: 13.5, fontWeight: 600 }}>
+                Se mantienen las categorías originales de tu plantilla para que
+                los números coincidan.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="section-head" style={{ marginTop: 26 }}>
+          <div>
+            <h2>Historial</h2>
+            <p>{gastos.length} gastos registrados.</p>
+          </div>
+        </div>
+
+        <div className="table-wrap">
+          <table className="table-warm">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Concepto</th>
+                <th>Categoría</th>
+                <th>50/30/20</th>
+                <th>Monto</th>
+                <th>Medio</th>
+                <th>Fijo</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </main>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="empty">
+                    Cargando gastos…
+                  </td>
+                </tr>
+              ) : gastos.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="empty">
+                    Todavía no hay gastos.
+                  </td>
+                </tr>
+              ) : (
+                gastos.map((row) => (
+                  <tr key={row.id}>
+                    <td>{dateLabel(row.fecha)}</td>
+                    <td style={{ fontWeight: 800 }}>{row.concepto}</td>
+                    <td>{row.categoria}</td>
+                    <td>
+                      <span
+                        className={`badge ${
+                          row.tipo_503020 === "Necesidades"
+                            ? "badge-necesidades"
+                            : row.tipo_503020 === "Ahorro"
+                              ? "badge-ahorro"
+                              : "badge-deseos"
+                        }`}
+                      >
+                        {row.tipo_503020}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 800 }}>
+                      {ars(amountOf(row))}
+                      {row.moneda && row.moneda !== "ARS" ? (
+                        <span className="muted" style={{ fontWeight: 600 }}>
+                          {" "}
+                          ({row.monto} {row.moneda})
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>{row.medio_pago}</td>
+                    <td>{row.fijo_variable}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        type="button"
+                        className="btn-accent"
+                        onClick={() => handleDelete(row.id)}
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </>
   );
 }
