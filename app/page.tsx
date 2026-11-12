@@ -14,6 +14,7 @@ import {
   RULE,
   type Gasto,
   type Ingreso,
+  type Movimiento,
 } from "@/app/lib/finance";
 import {
   ars,
@@ -30,6 +31,10 @@ export default function Dashboard() {
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTable, setEditingTable] = useState<string | null>(null);
+  const [newConcepto, setNewConcepto] = useState('');
+  const [newMonto, setNewMonto] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +71,29 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
+
+  const handleDelete = async (mov: Movimiento) => {
+    const table = mov.tipo === "ingreso" ? "ingresos" : "gastos";
+    await supabase.from(table).delete().eq("id", mov.id);
+    setEditingId(null);
+    setEditingTable(null);
+    load();
+  };
+
+  const handleEditStart = (mov: Movimiento) => {
+    setEditingId(mov.id);
+    setEditingTable(mov.tipo === "ingreso" ? "ingresos" : "gastos");
+    setNewConcepto(mov.titulo || "");
+    setNewMonto(`${mov.monto}`);
+  };
+
+  const handleEditSave = async () => {
+    if (!editingId || !editingTable) return;
+    await supabase.from(editingTable).update({ concepto: newConcepto, monto: Number(newMonto) }).eq("id", editingId);
+    setEditingId(null);
+    setEditingTable(null);
+    load();
+  };
 
   const monthly = useMemo(() => buildMonthly(ingresos, gastos), [ingresos, gastos]);
   const currentKey = todayKey();
@@ -345,11 +373,7 @@ export default function Dashboard() {
             {budgets.map((item) => {
               const share = ingresosMes > 0 ? (item.spent / ingresosMes) * 100 : 0;
               const fill =
-                item.target > 0
-                  ? Math.min((item.spent / item.target) * 100, 100)
-                  : item.spent > 0
-                    ? 100
-                    : 0;
+                item.target > 0 ? Math.min((item.spent / item.target) * 100, 100) : 0;
               const rest = item.target - item.spent;
               return (
                 <div className="progress-item" key={item.label}>
@@ -362,19 +386,31 @@ export default function Dashboard() {
                     </span>
                     <span className="pct">
                       {ars(item.spent)}
-                      <span className="muted" style={{ fontWeight: 700 }}>
-                        {" "}
-                        / {ars(item.target)}
-                      </span>
+                      {item.target > 0 ? (
+                        <span className="muted" style={{ fontWeight: 700 }}>
+                          {" "}
+                          / {ars(item.target)}
+                        </span>
+                      ) : null}
                     </span>
                   </div>
                   <div className={item.variant}>
                     <span style={{ width: `${fill}%` }} />
                   </div>
                   <div className="progress-meta">
-                    <span>{ingresosMes > 0 ? `${pct(share)} del ingreso` : "Sin ingresos"}</span>
-                    <span style={{ color: rest < 0 ? "var(--brand-ink)" : undefined }}>
-                      {rest < 0 ? `Excedido ${ars(Math.abs(rest))}` : `Disponible ${ars(rest)}`}
+                    <span>
+                      {ingresosMes > 0 ? `${pct(share)} del ingreso` : "Sin objetivo este mes"}
+                    </span>
+                    <span
+                      style={{
+                        color: ingresosMes === 0 ? "var(--muted)" : rest < 0 ? "var(--brand-ink)" : undefined,
+                      }}
+                    >
+                      {ingresosMes === 0
+                        ? `Gastado ${ars(item.spent)}`
+                        : rest < 0
+                          ? `Excedido ${ars(Math.abs(rest))}`
+                          : `Disponible ${ars(rest)}`}
                     </span>
                   </div>
                 </div>
@@ -519,6 +555,11 @@ export default function Dashboard() {
                     <div>
                       <div className={`movement-amount ${movement.tipo}`}>
                         {movement.tipo === "ingreso" ? "+" : "−"} {ars(movement.monto)}
+                      </div>
+                      <div style={{display: 'flex', gap: 6, marginTop: 4, fontSize: 12}}>
+                        <button className='btn btn-ghost btn-xs' onClick={() => handleDelete(movement)}>Eliminar</button>
+                        <button className='btn btn-ghost btn-xs' onClick={() => handleEditStart(movement)}>Editar</button>
+                        <button className='btn btn-primary btn-xs' onClick={() => handleEditSave()}>Guardar</button>
                       </div>
                       {movement.tipo503020 ? (
                         <div style={{ textAlign: "right", marginTop: 3 }}>
