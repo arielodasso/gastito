@@ -1031,4 +1031,19 @@ textarea.input-warm {
 .text-graphite-secondary { color: var(--text-soft); }
 .text-ashen-secondary { color: var(--muted); }
 .text-muted-caption { color: var(--muted); }
+
+/* Icon-only buttons deben nunca forzar ancho */
+.btn-xs {
+  min-width: 0;
+  padding: 2px 6px;
+}
+
+/* Movimientos y celdas nunca deben crecer por contenido */
+.movement,
+.grid-2 > *,
+.grid-2-even > *,
+.hero-grid > *,
+.section-head > * {
+  min-width: 0;
+}
 .border-warm-neutral { border-color: var(--border); }
