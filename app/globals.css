@@ -810,6 +810,101 @@ textarea.input-warm {
   border-bottom: 0;
 }
 
+.table-history {
+  overflow: hidden;
+}
+
+.table-history .table-warm {
+  table-layout: fixed;
+}
+
+.table-history .table-warm th,
+.table-history .table-warm td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-history .table-warm td.cell-actions {
+  overflow: visible;
+}
+
+.table-history .table-warm th {
+  padding: 9px 10px;
+}
+
+.table-history .table-warm td {
+  padding: 10px;
+  font-size: 13.5px;
+}
+
+.table-wrap.table-history .table-warm th:first-child,
+.table-wrap.table-history .table-warm td:first-child {
+  padding-left: 16px;
+}
+
+.table-wrap.table-history .table-warm th:last-child,
+.table-wrap.table-history .table-warm td:last-child {
+  padding-right: 16px;
+}
+
+.table-ingresos .table-warm th:nth-child(1),
+.table-ingresos .table-warm td:nth-child(1) {
+  width: 86px;
+}
+.table-ingresos .table-warm th:nth-child(3),
+.table-ingresos .table-warm td:nth-child(3) {
+  width: 112px;
+}
+.table-ingresos .table-warm th:nth-child(4),
+.table-ingresos .table-warm td:nth-child(4) {
+  width: 120px;
+}
+.table-ingresos .table-warm th:nth-child(5),
+.table-ingresos .table-warm td:nth-child(5) {
+  width: 128px;
+}
+.table-ingresos .table-warm th:nth-child(6),
+.table-ingresos .table-warm td:nth-child(6) {
+  width: 88px;
+}
+.table-ingresos .table-warm th:nth-child(7),
+.table-ingresos .table-warm td:nth-child(7) {
+  width: 140px;
+}
+.table-ingresos .table-warm th:nth-child(8),
+.table-ingresos .table-warm td:nth-child(8) {
+  width: 80px;
+}
+
+.table-gastos .table-warm th:nth-child(1),
+.table-gastos .table-warm td:nth-child(1) {
+  width: 86px;
+}
+.table-gastos .table-warm th:nth-child(3),
+.table-gastos .table-warm td:nth-child(3) {
+  width: 148px;
+}
+.table-gastos .table-warm th:nth-child(4),
+.table-gastos .table-warm td:nth-child(4) {
+  width: 132px;
+}
+.table-gastos .table-warm th:nth-child(5),
+.table-gastos .table-warm td:nth-child(5) {
+  width: 128px;
+}
+.table-gastos .table-warm th:nth-child(6),
+.table-gastos .table-warm td:nth-child(6) {
+  width: 112px;
+}
+.table-gastos .table-warm th:nth-child(7),
+.table-gastos .table-warm td:nth-child(7) {
+  width: 88px;
+}
+.table-gastos .table-warm th:nth-child(8),
+.table-gastos .table-warm td:nth-child(8) {
+  width: 80px;
+}
+
 @media (max-width: 980px) {
   .table-warm th,
   .table-warm td {
@@ -846,8 +941,8 @@ textarea.input-warm {
     display: none;
   }
   .table-history .table-warm tbody tr {
-    margin-bottom: 10px;
-    padding: 12px 14px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
     border: 1px solid var(--border);
     border-radius: 16px;
     background: #fff;
@@ -861,9 +956,10 @@ textarea.input-warm {
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    padding: 4px 0;
+    padding: 3px 0;
     border: 0;
     white-space: normal;
+    overflow-wrap: anywhere;
     text-align: right;
     font-size: 13px;
   }

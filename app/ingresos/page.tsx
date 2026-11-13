@@ -175,7 +175,7 @@ export default function IngresosPage() {
           </div>
         </div>
 
-        <div className="table-wrap table-history">
+        <div className="table-wrap table-history table-ingresos">
           <table className="table-warm">
             <thead>
               <tr>
@@ -206,13 +206,13 @@ export default function IngresosPage() {
                 ingresos.map((row) => (
                   <tr key={row.id}>
                     <td data-label="Fecha">{shortDateLabel(row.fecha)}</td>
-                    <td data-label="Cliente" style={{ fontWeight: 800 }}>
+                    <td data-label="Cliente" title={row.cliente_fuente ?? undefined} style={{ fontWeight: 800 }}>
                       {row.cliente_fuente}
                     </td>
-                    <td data-label="Tipo" className="col-optional-sm">
+                    <td data-label="Tipo" className="col-optional-sm" title={row.tipo ?? undefined}>
                       {row.tipo}
                     </td>
-                    <td data-label="Proyecto" className="col-optional">
+                    <td data-label="Proyecto" className="col-optional" title={row.proyecto || undefined}>
                       {row.proyecto || "—"}
                     </td>
                     <td data-label="Monto" style={{ fontWeight: 800 }}>
@@ -232,7 +232,7 @@ export default function IngresosPage() {
                     <td
                       data-label="Notas"
                       className="col-optional"
-                      style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis" }}
+                      title={row.notas || undefined}
                     >
                       {row.notas || "—"}
                     </td>

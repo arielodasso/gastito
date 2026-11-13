@@ -171,7 +171,7 @@ export default function GastosPage() {
           </div>
         </div>
 
-        <div className="table-wrap table-history">
+        <div className="table-wrap table-history table-gastos">
           <table className="table-warm">
             <thead>
               <tr>
@@ -202,10 +202,10 @@ export default function GastosPage() {
                 gastos.map((row) => (
                   <tr key={row.id}>
                     <td data-label="Fecha">{shortDateLabel(row.fecha)}</td>
-                    <td data-label="Concepto" style={{ fontWeight: 800 }}>
+                    <td data-label="Concepto" title={row.concepto} style={{ fontWeight: 800 }}>
                       {row.concepto}
                     </td>
-                    <td data-label="Categoría" className="col-optional-sm">
+                    <td data-label="Categoría" className="col-optional-sm" title={row.categoria}>
                       {row.categoria}
                     </td>
                     <td data-label="50/30/20">
@@ -230,7 +230,7 @@ export default function GastosPage() {
                         </span>
                       ) : null}
                     </td>
-                    <td data-label="Medio" className="col-optional">
+                    <td data-label="Medio" className="col-optional" title={row.medio_pago ?? undefined}>
                       {row.medio_pago}
                     </td>
                     <td data-label="Fijo" className="col-optional">
