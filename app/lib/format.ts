@@ -85,6 +85,15 @@ export function dateLabel(fecha: string): string {
   return `${day} ${MONTHS_SHORT[month - 1]} ${year}`;
 }
 
+export function shortDateLabel(fecha: string): string {
+  if (!fecha) return "";
+  const [year, month, day] = fecha.split("-").map(Number);
+  if (!year || !month || !day) return fecha;
+  return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${String(
+    year
+  ).slice(2)}`;
+}
+
 export function todayKey(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;

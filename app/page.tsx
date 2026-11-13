@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/supabaseClient";
 import TopNav from "@/app/components/TopNav";
 import Modal from "@/app/components/Modal";
-import QuickAdd from "@/app/components/QuickAdd";
+import QuickRegister from "@/app/components/QuickRegister";
 import { FlujoBars, PatrimonioChart } from "@/app/components/Charts";
 import {
   buildMonthly,
@@ -186,29 +186,7 @@ export default function Dashboard() {
         <section className="hero">
           <div className="hero-grid">
             <div>
-              <span className="kicker">Panel 50 / 30 / 20</span>
-              <h1 className="hero-title">
-                Tus finanzas, <span className="gradient-text">claras</span>.
-              </h1>
-              <p className="lead">
-                Patrimonio, ingresos y gastos de tu plantilla en un solo lugar.
-                Cargá un movimiento hablando o escribiendo y el panel se ordena
-                solo.
-              </p>
-
-              <QuickAdd onSaved={load} />
-
-              <ul className="chips" style={{ marginTop: 18 }}>
-                <li>
-                  <span className="dot" /> Regla 50/30/20
-                </li>
-                <li>
-                  <span className="dot" /> Patrimonio mes a mes
-                </li>
-                <li>
-                  <span className="dot" /> Multi moneda
-                </li>
-              </ul>
+              <QuickRegister onSaved={load} />
             </div>
 
             <aside
@@ -584,29 +562,39 @@ export default function Dashboard() {
                         {movement.detalle ? ` · ${movement.detalle}` : ""}
                       </div>
                     </div>
-                    <div>
-                      <div className={`movement-amount ${movement.tipo}`}>
-                        {movement.tipo === "ingreso" ? "+" : "−"} {ars(movement.monto)}
-                      </div>
-                      <div style={{display: 'flex', gap: 6, marginTop: 4, fontSize: 12}}>
-                        <button className='btn btn-ghost btn-xs' aria-label="Eliminar" onClick={() => handleDelete(movement)}>×</button>
-                        <button className='btn btn-ghost btn-xs' aria-label="Editar" onClick={() => handleEditStart(movement)}>✎</button>
-                      </div>
+                    <div className={`movement-amount ${movement.tipo}`}>
+                      {movement.tipo === "ingreso" ? "+" : "−"} {ars(movement.monto)}
+                    </div>
+                    <div className="movement-meta">
                       {movement.tipo503020 ? (
-                        <div style={{ textAlign: "right", marginTop: 3 }}>
-                          <span
-                            className={`badge ${
-                              movement.tipo503020 === "Necesidades"
-                                ? "badge-necesidades"
-                                : movement.tipo503020 === "Ahorro"
-                                  ? "badge-ahorro"
-                                  : "badge-deseos"
-                            }`}
-                          >
-                            {movement.tipo503020}
-                          </span>
-                        </div>
+                        <span
+                          className={`badge movement-badge ${
+                            movement.tipo503020 === "Necesidades"
+                              ? "badge-necesidades"
+                              : movement.tipo503020 === "Ahorro"
+                                ? "badge-ahorro"
+                                : "badge-deseos"
+                          }`}
+                        >
+                          {movement.tipo503020}
+                        </span>
                       ) : null}
+                    </div>
+                    <div className="movement-actions">
+                      <button
+                        className="btn btn-ghost btn-xs"
+                        aria-label="Editar"
+                        onClick={() => handleEditStart(movement)}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-xs"
+                        aria-label="Eliminar"
+                        onClick={() => handleDelete(movement)}
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
                 ))}

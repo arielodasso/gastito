@@ -8,9 +8,17 @@ type ModalProps = {
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  size?: "md" | "lg";
 };
 
-export default function Modal({ open, title, onClose, children, footer }: ModalProps) {
+export default function Modal({
+  open,
+  title,
+  onClose,
+  children,
+  footer,
+  size = "md",
+}: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -35,7 +43,12 @@ export default function Modal({ open, title, onClose, children, footer }: ModalP
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
+      <div
+        className={size === "lg" ? "modal modal-lg" : "modal"}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
         <div className="modal-head">
           <h3>{title}</h3>
           <button
