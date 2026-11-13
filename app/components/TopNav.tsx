@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 const LINKS = [
   { href: "/", label: "Resumen" },
@@ -12,6 +13,7 @@ const LINKS = [
 
 export default function TopNav() {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
 
   return (
     <header className="nav">
@@ -21,7 +23,24 @@ export default function TopNav() {
           <span>Gastito</span>
         </Link>
 
-        <nav className="nav-links" aria-label="Principal">
+        <button
+          type="button"
+          className="nav-toggle"
+          aria-label={open ? "Cerrar menú" : "Abrir menú"}
+          aria-expanded={open}
+          aria-controls="menu-principal"
+          onClick={() => setOpen((value) => !value)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+
+        <nav
+          id="menu-principal"
+          className={open ? "nav-links open" : "nav-links"}
+          aria-label="Principal"
+        >
           {LINKS.map((link) => {
             const active =
               link.href === "/"
@@ -32,12 +51,17 @@ export default function TopNav() {
                 key={link.href}
                 href={link.href}
                 className={active ? "active" : undefined}
+                onClick={() => setOpen(false)}
               >
                 {link.label}
               </Link>
             );
           })}
-          <Link href="/carga-rapida" className="nav-cta">
+          <Link
+            href="/carga-rapida"
+            className="nav-cta"
+            onClick={() => setOpen(false)}
+          >
             Carga rápida
           </Link>
         </nav>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/supabaseClient";
 import TopNav from "@/app/components/TopNav";
+import Modal from "@/app/components/Modal";
 import { amountOf, monthKeyOf, type Ingreso } from "@/app/lib/finance";
 import { ars, compactMoney, dateLabel, todayKey } from "@/app/lib/format";
 
@@ -26,6 +27,14 @@ export default function IngresosPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{
+    id: string;
+    cliente: string;
+    monto: string;
+  } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Ingreso | null>(null);
+  const [working, setWorking] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { data, error: loadError } = await supabase
@@ -104,30 +113,62 @@ export default function IngresosPage() {
     setSaving(false);
   }
 
-  async function handleDelete(id: string) {
-    if (!window.confirm("¿Eliminar este ingreso?")) return;
-    const { error: deleteError } = await supabase.from("ingresos").delete().eq("id", id);
-    if (deleteError) {
-      setError("No se pudo eliminar el ingreso.");
-      return;
-    }
-    setIngresos((rows) => rows.filter((row) => row.id !== id));
+  function handleDelete(row: Ingreso) {
+    setDialogError(null);
+    setPendingDelete(row);
   }
 
-  async function handleEditIngreso(id: string) {
-    const newMonto = window.prompt("Nuevo monto:", "");
-    if (newMonto === null) return;
-    const num = Number(newMonto);
-    if (!Number.isFinite(num) || num <= 0) {
-      setError("Monto inválido");
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setWorking(true);
+    const { error: deleteError } = await supabase
+      .from("ingresos")
+      .delete()
+      .eq("id", pendingDelete.id);
+    setWorking(false);
+    if (deleteError) {
+      setDialogError("No se pudo eliminar el ingreso.");
       return;
     }
-    const { error } = await supabase.from("ingresos").update({ monto: num }).eq("id", id);
-    if (error) {
-      setError("No se pudo actualizar el ingreso.");
-    } else {
-      setIngresos((rows) => rows.map((r) => r.id === id ? { ...r, monto: num } as Ingreso : r));
+    setIngresos((rows) => rows.filter((row) => row.id !== pendingDelete.id));
+    setPendingDelete(null);
+  }
+
+  function handleEditIngreso(row: Ingreso) {
+    setDialogError(null);
+    setEditing({
+      id: row.id,
+      cliente: row.cliente_fuente || "",
+      monto: String(row.monto),
+    });
+  }
+
+  async function saveEditIngreso() {
+    if (!editing) return;
+    const monto = Number(editing.monto);
+    if (!editing.cliente.trim() || !Number.isFinite(monto) || monto <= 0) {
+      setDialogError("Completá el cliente y un monto mayor a cero.");
+      return;
     }
+    setWorking(true);
+    const { error: updateError } = await supabase
+      .from("ingresos")
+      .update({ cliente_fuente: editing.cliente.trim(), monto })
+      .eq("id", editing.id);
+    setWorking(false);
+    if (updateError) {
+      setDialogError("No se pudo actualizar el ingreso.");
+      return;
+    }
+    setIngresos((rows) =>
+      rows.map((row) =>
+        row.id === editing.id
+          ? { ...row, cliente_fuente: editing.cliente.trim(), monto }
+          : row
+      )
+    );
+    setEditing(null);
+    setNotice("Ingreso actualizado.");
   }
 
   return (
@@ -417,8 +458,8 @@ export default function IngresosPage() {
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <div style={{display: 'flex', gap: 4, fontSize: 12, alignItems: 'center'}}>
-                        <button className='btn btn-ghost btn-xs' aria-label="Eliminar" onClick={() => handleDelete(row.id)}>×</button>
-                        <button className='btn btn-ghost btn-xs' aria-label="Editar" onClick={() => handleEditIngreso(row.id)}>✎</button>
+                        <button className='btn btn-ghost btn-xs' aria-label="Eliminar" onClick={() => handleDelete(row)}>×</button>
+                        <button className='btn btn-ghost btn-xs' aria-label="Editar" onClick={() => handleEditIngreso(row)}>✎</button>
                       </div>
                     </td>
                   </tr>
@@ -427,6 +468,115 @@ export default function IngresosPage() {
             </tbody>
           </table>
         </div>
+
+        <Modal
+          open={!!editing}
+          title="Editar ingreso"
+          onClose={() => {
+            setEditing(null);
+            setDialogError(null);
+          }}
+          footer={
+            <>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  setEditing(null);
+                  setDialogError(null);
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={saveEditIngreso}
+                disabled={working}
+              >
+                {working ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </>
+          }
+        >
+          {editing ? (
+            <>
+              {dialogError ? <div className="alert">{dialogError}</div> : null}
+              <div className="form-field">
+                <label className="form-label" htmlFor="edit-cliente">
+                  Cliente / Fuente
+                </label>
+                <input
+                  id="edit-cliente"
+                  className="input-warm"
+                  value={editing.cliente}
+                  onChange={(event) =>
+                    setEditing({ ...editing, cliente: event.target.value })
+                  }
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="edit-monto">
+                  Monto
+                </label>
+                <input
+                  id="edit-monto"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="input-warm"
+                  value={editing.monto}
+                  onChange={(event) =>
+                    setEditing({ ...editing, monto: event.target.value })
+                  }
+                />
+              </div>
+            </>
+          ) : null}
+        </Modal>
+
+        <Modal
+          open={!!pendingDelete}
+          title="Eliminar ingreso"
+          onClose={() => {
+            setPendingDelete(null);
+            setDialogError(null);
+          }}
+          footer={
+            <>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  setPendingDelete(null);
+                  setDialogError(null);
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary modal-danger"
+                type="button"
+                onClick={confirmDelete}
+                disabled={working}
+              >
+                {working ? "Eliminando…" : "Eliminar"}
+              </button>
+            </>
+          }
+        >
+          {pendingDelete ? (
+            <>
+              {dialogError ? <div className="alert">{dialogError}</div> : null}
+              <p>
+                ¿Eliminar el ingreso de{" "}
+                <strong>{pendingDelete.cliente_fuente || "este registro"}</strong>{" "}
+                por <strong>{ars(amountOf(pendingDelete))}</strong>? Esta acción no
+                se puede deshacer.
+              </p>
+            </>
+          ) : null}
+        </Modal>
       </main>
     </>
   );

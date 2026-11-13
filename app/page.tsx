@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/supabaseClient";
 import TopNav from "@/app/components/TopNav";
+import Modal from "@/app/components/Modal";
 import QuickAdd from "@/app/components/QuickAdd";
 import { FlujoBars, PatrimonioChart } from "@/app/components/Charts";
 import {
@@ -31,10 +32,14 @@ export default function Dashboard() {
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingTable, setEditingTable] = useState<string | null>(null);
-  const [newConcepto, setNewConcepto] = useState('');
-  const [newMonto, setNewMonto] = useState('');
+  const [editing, setEditing] = useState<{
+    movement: Movimiento;
+    titulo: string;
+    monto: string;
+  } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Movimiento | null>(null);
+  const [working, setWorking] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -72,28 +77,55 @@ export default function Dashboard() {
     load();
   }, [load]);
 
-  const handleDelete = async (mov: Movimiento) => {
-    const table = mov.tipo === "ingreso" ? "ingresos" : "gastos";
-    await supabase.from(table).delete().eq("id", mov.id);
-    setEditingId(null);
-    setEditingTable(null);
-    load();
-  };
+  function handleDelete(mov: Movimiento) {
+    setDialogError(null);
+    setPendingDelete(mov);
+  }
 
-  const handleEditStart = (mov: Movimiento) => {
-    setEditingId(mov.id);
-    setEditingTable(mov.tipo === "ingreso" ? "ingresos" : "gastos");
-    setNewConcepto(mov.titulo || "");
-    setNewMonto(`${mov.monto}`);
-  };
-
-  const handleEditSave = async () => {
-    if (!editingId || !editingTable) return;
-    await supabase.from(editingTable).update({ concepto: newConcepto, monto: Number(newMonto) }).eq("id", editingId);
-    setEditingId(null);
-    setEditingTable(null);
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    const table = pendingDelete.tipo === "ingreso" ? "ingresos" : "gastos";
+    setWorking(true);
+    const { error: deleteError } = await supabase
+      .from(table)
+      .delete()
+      .eq("id", pendingDelete.id);
+    setWorking(false);
+    if (deleteError) {
+      setDialogError(`No se pudo eliminar el ${pendingDelete.tipo}.`);
+      return;
+    }
+    setPendingDelete(null);
     load();
-  };
+  }
+
+  function handleEditStart(mov: Movimiento) {
+    setDialogError(null);
+    setEditing({ movement: mov, titulo: mov.titulo || "", monto: String(mov.monto) });
+  }
+
+  async function handleEditSave() {
+    if (!editing) return;
+    const monto = Number(editing.monto);
+    if (!editing.titulo.trim() || !Number.isFinite(monto) || monto <= 0) {
+      setDialogError("Completá la descripción y un monto mayor a cero.");
+      return;
+    }
+    const table = editing.movement.tipo === "ingreso" ? "ingresos" : "gastos";
+    const field = editing.movement.tipo === "ingreso" ? "cliente_fuente" : "concepto";
+    setWorking(true);
+    const { error: updateError } = await supabase
+      .from(table)
+      .update({ [field]: editing.titulo.trim(), monto })
+      .eq("id", editing.movement.id);
+    setWorking(false);
+    if (updateError) {
+      setDialogError(`No se pudo actualizar el ${editing.movement.tipo}.`);
+      return;
+    }
+    setEditing(null);
+    load();
+  }
 
   const monthly = useMemo(() => buildMonthly(ingresos, gastos), [ingresos, gastos]);
   const currentKey = todayKey();
@@ -559,7 +591,6 @@ export default function Dashboard() {
                       <div style={{display: 'flex', gap: 6, marginTop: 4, fontSize: 12}}>
                         <button className='btn btn-ghost btn-xs' aria-label="Eliminar" onClick={() => handleDelete(movement)}>×</button>
                         <button className='btn btn-ghost btn-xs' aria-label="Editar" onClick={() => handleEditStart(movement)}>✎</button>
-                        <button className='btn btn-primary btn-xs' onClick={() => handleEditSave()}>Guardar</button>
                       </div>
                       {movement.tipo503020 ? (
                         <div style={{ textAlign: "right", marginTop: 3 }}>
@@ -617,6 +648,114 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
+
+        <Modal
+          open={!!editing}
+          title={editing?.movement.tipo === "ingreso" ? "Editar ingreso" : "Editar gasto"}
+          onClose={() => {
+            setEditing(null);
+            setDialogError(null);
+          }}
+          footer={
+            <>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  setEditing(null);
+                  setDialogError(null);
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={handleEditSave}
+                disabled={working}
+              >
+                {working ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </>
+          }
+        >
+          {editing ? (
+            <>
+              {dialogError ? <div className="alert">{dialogError}</div> : null}
+              <div className="form-field">
+                <label className="form-label" htmlFor="edit-titulo">
+                  {editing.movement.tipo === "ingreso" ? "Cliente / Fuente" : "Concepto"}
+                </label>
+                <input
+                  id="edit-titulo"
+                  className="input-warm"
+                  value={editing.titulo}
+                  onChange={(event) =>
+                    setEditing({ ...editing, titulo: event.target.value })
+                  }
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="edit-monto">
+                  Monto
+                </label>
+                <input
+                  id="edit-monto"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="input-warm"
+                  value={editing.monto}
+                  onChange={(event) =>
+                    setEditing({ ...editing, monto: event.target.value })
+                  }
+                />
+              </div>
+            </>
+          ) : null}
+        </Modal>
+
+        <Modal
+          open={!!pendingDelete}
+          title={pendingDelete?.tipo === "ingreso" ? "Eliminar ingreso" : "Eliminar gasto"}
+          onClose={() => {
+            setPendingDelete(null);
+            setDialogError(null);
+          }}
+          footer={
+            <>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  setPendingDelete(null);
+                  setDialogError(null);
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary modal-danger"
+                type="button"
+                onClick={confirmDelete}
+                disabled={working}
+              >
+                {working ? "Eliminando…" : "Eliminar"}
+              </button>
+            </>
+          }
+        >
+          {pendingDelete ? (
+            <>
+              {dialogError ? <div className="alert">{dialogError}</div> : null}
+              <p>
+                ¿Eliminar <strong>{pendingDelete.titulo || "este registro"}</strong>{" "}
+                por <strong>{ars(pendingDelete.monto)}</strong>? Esta acción no se
+                puede deshacer.
+              </p>
+            </>
+          ) : null}
+        </Modal>
       </main>
     </>
   );
